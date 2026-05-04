@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.task import GenerateRequest, TaskResponse
 from app.services import task_service
+from app.logging_config import get_logger
 
+logger = get_logger("api.tasks")
 router = APIRouter()
 
 
@@ -14,6 +16,7 @@ async def start_generation(
     data: GenerateRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info("Generate request: project=%s file=%s style=%s", project_id, data.file_id, data.style)
     options = {
         "ceiling_height": data.ceiling_height or 2.8,
         "wall_thickness": data.wall_thickness or 0.2,
@@ -26,6 +29,7 @@ async def start_generation(
     )
     # Start background task
     task_service.start_generation_task(task.id, project_id, data.file_id, data.style, options)
+    logger.info("Generation task created: %s", task.id)
     return task
 
 

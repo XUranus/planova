@@ -111,7 +111,8 @@
     "start": "Start Generation",
     "progress": "Generating...",
     "completed": "Scene generated successfully",
-    "pending": "Waiting to start..."
+    "pending": "Waiting to start...",
+    "failed": "Generation failed"
   },
   "settings": {
     "title": "Settings",

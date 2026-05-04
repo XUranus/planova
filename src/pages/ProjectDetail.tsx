@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { useProjectStore } from '@/stores/projectStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { useTaskStore } from '@/stores/taskStore'
+import { toast } from '@/stores/toastStore'
 import type { TestSceneId } from '@/data/testScenes'
 import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
@@ -44,29 +45,32 @@ export function ProjectDetail() {
     return Object.values(activeTasks).find((t) => t.projectId === id)
   }, [activeTasks, id])
 
+  // Show toast when task status changes
+  useEffect(() => {
+    if (!activeTask) return
+    if (activeTask.status === 'completed') {
+      toast.success(t('generate.completed'))
+      if (id) fetchScene(id)
+    }
+    if (activeTask.status === 'failed') {
+      toast.error(`${t('common.error')}: ${activeTask.errorMessage}`)
+    }
+  }, [activeTask?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleGenerate = async () => {
     if (!id || files.length === 0) return
-    const file = files[0] // Use first uploaded file
+    const file = files[0]
     try {
-      const task = await startGeneration(id, {
+      toast.info(t('generate.progress'))
+      await startGeneration(id, {
         fileId: file.id,
         style: project?.style || 'modern_luxury',
         ceilingHeight: 2.8,
         wallThickness: 0.2,
       })
-      // Poll for task completion — scene will be fetched when task completes
-      const unsub = useTaskStore.subscribe((state) => {
-        const t = state.activeTasks[task.id]
-        if (t?.status === 'completed') {
-          fetchScene(id)
-          unsub()
-        }
-        if (t?.status === 'failed') {
-          unsub()
-        }
-      })
-    } catch {
-      // Error handled by task store
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`${t('generate.failed')}: ${msg}`)
     }
   }
 

@@ -7,18 +7,25 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
+from app.logging_config import setup_logging, get_logger
 from app.api import projects, files, tasks, scenes, settings as settings_api
+
+logger = get_logger("main")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    setup_logging()
+    logger.info("Planova backend starting on %s:%d", settings.host, settings.port)
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.preview_dir.mkdir(parents=True, exist_ok=True)
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    Path("llm_audit").mkdir(parents=True, exist_ok=True)
     await init_db()
+    logger.info("Database initialized, upload_dir=%s", settings.upload_dir)
     yield
-    # Shutdown (nothing to clean up)
+    logger.info("Planova backend shutting down")
 
 
 app = FastAPI(

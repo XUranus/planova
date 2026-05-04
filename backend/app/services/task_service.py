@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.task import GenerationTask
 from app.models.project import Project
 from app.database import async_session
+from app.logging_config import get_logger
+
+logger = get_logger("services.task")
 
 
 async def create_task(db: AsyncSession, project_id: str, task_type: str, input_data: dict) -> GenerationTask:
@@ -20,6 +23,7 @@ async def create_task(db: AsyncSession, project_id: str, task_type: str, input_d
     db.add(task)
     await db.commit()
     await db.refresh(task)
+    logger.info("Created task %s type=%s project=%s", task.id, task_type, project_id)
     return task
 
 
@@ -44,6 +48,7 @@ async def update_task_progress(db: AsyncSession, task_id: str, progress: int, st
             task.status = status
         task.updated_at = datetime.now(timezone.utc)
         await db.commit()
+        logger.debug("Task %s progress=%d status=%s", task_id, progress, status or task.status)
 
 
 async def complete_task(db: AsyncSession, task_id: str, output_data: dict) -> None:
@@ -54,6 +59,7 @@ async def complete_task(db: AsyncSession, task_id: str, output_data: dict) -> No
         task.output_data = output_data
         task.updated_at = datetime.now(timezone.utc)
         await db.commit()
+        logger.info("Task %s completed: %s", task_id, output_data)
 
 
 async def fail_task(db: AsyncSession, task_id: str, error_message: str) -> None:
@@ -63,6 +69,7 @@ async def fail_task(db: AsyncSession, task_id: str, error_message: str) -> None:
         task.error_message = error_message
         task.updated_at = datetime.now(timezone.utc)
         await db.commit()
+        logger.error("Task %s failed: %s", task_id, error_message)
 
 
 async def cancel_task(db: AsyncSession, task_id: str) -> bool:
@@ -73,6 +80,7 @@ async def cancel_task(db: AsyncSession, task_id: str) -> bool:
         task.status = "cancelled"
         task.updated_at = datetime.now(timezone.utc)
         await db.commit()
+        logger.info("Task %s cancelled", task_id)
         return True
     return False
 
@@ -85,7 +93,8 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
     from app.services.file_service import get_file
     from app.services.scene_service import save_scene
     from app.pipeline.floorplan_parser import parse_floor_plan
-    from app.database import async_session
+
+    logger.info("Generation task %s started: project=%s file=%s style=%s", task_id, project_id, file_id, style)
 
     async with async_session() as db:
         try:
@@ -97,15 +106,18 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
             if project:
                 project.status = "generating"
                 await db.commit()
+                logger.info("Project %s status -> generating", project_id)
 
             # Get file
             uploaded = await get_file(db, file_id)
             if not uploaded:
                 raise ValueError(f"File {file_id} not found")
 
+            logger.info("File found: %s at %s", uploaded.original_filename, uploaded.storage_path)
             await update_task_progress(db, task_id, 10, "running")
 
             # Parse floor plan (preprocess + VLM + normalize)
+            logger.info("Starting floor plan parsing pipeline...")
             scene_json = await parse_floor_plan(
                 uploaded.storage_path,
                 style=style,
@@ -115,10 +127,17 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
                 project_id=project_id,
             )
 
+            logger.info(
+                "Pipeline complete: %d rooms, %d walls, %d objects",
+                len(scene_json.get("rooms", [])),
+                len(scene_json.get("walls", [])),
+                len(scene_json.get("objects", [])),
+            )
             await update_task_progress(db, task_id, 80, "running")
 
             # Save scene
             scene = await save_scene(db, project_id, scene_json)
+            logger.info("Scene saved: %s", scene.id)
 
             await update_task_progress(db, task_id, 95, "running")
 
@@ -131,7 +150,10 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
                 project.updated_at = datetime.now(timezone.utc)
                 await db.commit()
 
+            logger.info("Generation task %s finished successfully", task_id)
+
         except Exception as e:
+            logger.exception("Generation task %s failed: %s", task_id, e)
             await fail_task(db, task_id, str(e))
             # Update project status
             async with async_session() as db2:
@@ -144,4 +166,5 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
 
 def start_generation_task(task_id: str, project_id: str, file_id: str, style: str, options: dict) -> None:
     """Start a generation task in the background."""
+    logger.info("Dispatching background generation task %s", task_id)
     asyncio.create_task(run_generation_task(task_id, project_id, file_id, style, options))

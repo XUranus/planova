@@ -5,6 +5,7 @@ import { ProjectDetail } from '@/pages/ProjectDetail'
 import { UploadPage } from '@/pages/UploadPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/toaster'
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           </Route>
         </Routes>
       </HashRouter>
+      <Toaster />
     </TooltipProvider>
   )
 }

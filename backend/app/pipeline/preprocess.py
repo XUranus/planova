@@ -4,6 +4,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from app.logging_config import get_logger
+
+logger = get_logger("pipeline.preprocess")
+
 
 def preprocess_floor_plan(input_path: str) -> str:
     """
@@ -13,6 +17,8 @@ def preprocess_floor_plan(input_path: str) -> str:
     img = cv2.imread(input_path)
     if img is None:
         raise ValueError(f"Could not read image: {input_path}")
+
+    logger.info("Input image: %dx%d", img.shape[1], img.shape[0])
 
     # Convert to grayscale for processing
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

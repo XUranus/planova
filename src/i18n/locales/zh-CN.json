@@ -111,7 +111,8 @@
     "start": "开始生成",
     "progress": "正在生成...",
     "completed": "场景生成成功",
-    "pending": "等待开始..."
+    "pending": "等待开始...",
+    "failed": "生成失败"
   },
   "settings": {
     "title": "设置",

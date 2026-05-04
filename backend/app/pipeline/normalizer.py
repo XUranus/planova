@@ -22,11 +22,12 @@ def normalize_scene(
     scale_info = raw.get("scale_info", {})
 
     # Determine scale
-    meters_per_pixel = scale_info.get("meters_per_pixel", 0.02)
+    meters_per_pixel = scale_info.get("meters_per_pixel") or 0.02
     if not scale_info.get("detected", False):
         # Estimate scale from overall dimensions or use default
-        overall = raw.get("overall_dimensions", {})
-        if overall.get("width_meters", 0) > 0:
+        overall = raw.get("overall_dimensions", {}) or {}
+        width_m = overall.get("width_meters") or 0
+        if width_m > 0:
             # We know real dimensions, compute scale from pixel bbox
             meters_per_pixel = _estimate_scale_from_bbox(rooms, overall)
 
