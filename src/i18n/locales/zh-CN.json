@@ -99,6 +99,13 @@
     "ready": "就绪",
     "offline": "离线"
   },
+  "generate": {
+    "title": "生成 3D 场景",
+    "start": "开始生成",
+    "progress": "正在生成...",
+    "completed": "场景生成成功",
+    "pending": "等待开始..."
+  },
   "demo": {
     "title": "演示场景",
     "studio": "一居室公寓",

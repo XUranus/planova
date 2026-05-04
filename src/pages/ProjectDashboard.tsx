@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, FolderOpen } from 'lucide-react'
@@ -21,31 +21,43 @@ import { PROJECT_STYLES } from '@/types/project'
 export function ProjectDashboard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { projects, createProject, deleteProject } = useProjectStore()
+  const { projects, fetchProjects, syncCreateProject, syncDeleteProject } = useProjectStore()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newStyle, setNewStyle] = useState<ProjectStyle>('modern_luxury')
 
-  const handleCreate = () => {
+  useEffect(() => {
+    fetchProjects()
+  }, [fetchProjects])
+
+  const handleCreate = async () => {
     if (!newName.trim()) return
-    const project = createProject({
-      name: newName.trim(),
-      description: newDesc.trim(),
-      style: newStyle,
-    })
-    setNewName('')
-    setNewDesc('')
-    setNewStyle('modern_luxury')
-    setCreateOpen(false)
-    navigate(`/projects/${project.id}`)
+    try {
+      const project = await syncCreateProject({
+        name: newName.trim(),
+        description: newDesc.trim(),
+        style: newStyle,
+      })
+      setNewName('')
+      setNewDesc('')
+      setNewStyle('modern_luxury')
+      setCreateOpen(false)
+      navigate(`/projects/${project.id}`)
+    } catch {
+      // Error handled by UI
+    }
   }
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     if (window.confirm(t('dashboard.delete_confirm'))) {
-      deleteProject(id)
+      try {
+        await syncDeleteProject(id)
+      } catch {
+        // Error handled by UI
+      }
     }
   }
 

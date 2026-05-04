@@ -99,6 +99,13 @@
     "ready": "Ready",
     "offline": "Offline"
   },
+  "generate": {
+    "title": "Generate 3D",
+    "start": "Start Generation",
+    "progress": "Generating...",
+    "completed": "Scene generated successfully",
+    "pending": "Waiting to start..."
+  },
   "demo": {
     "title": "Demo Scenes",
     "studio": "Studio Apartment",

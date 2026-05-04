@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Upload, FileImage, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectStore } from '@/stores/projectStore'
+import { getPreviewUrl } from '@/api/files'
 import { cn } from '@/lib/utils'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
@@ -15,19 +16,24 @@ export function UploadPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const getProject = useProjectStore((s) => s.getProject)
-  const addFile = useProjectStore((s) => s.addFile)
-  const removeFile = useProjectStore((s) => s.removeFile)
   const getFiles = useProjectStore((s) => s.getFiles)
+  const syncUploadFile = useProjectStore((s) => s.syncUploadFile)
+  const syncDeleteFile = useProjectStore((s) => s.syncDeleteFile)
+  const fetchFiles = useProjectStore((s) => s.fetchFiles)
+
+  useEffect(() => {
+    if (id) fetchFiles(id)
+  }, [id, fetchFiles])
 
   const project = id ? getProject(id) : undefined
   const files = id ? getFiles(id) : []
 
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({})
+  const [uploading, setUploading] = useState(false)
 
   const processFile = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setError(null)
 
       if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -40,26 +46,18 @@ export function UploadPage() {
         return
       }
 
-      // Create preview URL for images
-      let previewUrl: string | null = null
-      if (file.type.startsWith('image/')) {
-        previewUrl = URL.createObjectURL(file)
-      }
+      if (!id) return
 
-      if (id) {
-        const uploaded = addFile(id, {
-          projectId: id,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          previewUrl,
-        })
-        if (previewUrl) {
-          setPreviewUrls((prev) => ({ ...prev, [uploaded.id]: previewUrl }))
-        }
+      setUploading(true)
+      try {
+        await syncUploadFile(id, file)
+      } catch {
+        setError(t('common.error'))
+      } finally {
+        setUploading(false)
       }
     },
-    [id, addFile, t]
+    [id, syncUploadFile, t],
   )
 
   const handleDrop = useCallback(
@@ -69,7 +67,7 @@ export function UploadPage() {
       const droppedFiles = Array.from(e.dataTransfer.files)
       droppedFiles.forEach(processFile)
     },
-    [processFile]
+    [processFile],
   )
 
   const handleFileInput = useCallback(
@@ -77,19 +75,15 @@ export function UploadPage() {
       const selectedFiles = Array.from(e.target.files || [])
       selectedFiles.forEach(processFile)
     },
-    [processFile]
+    [processFile],
   )
 
-  const handleRemove = (fileId: string) => {
+  const handleRemove = async (fileId: string) => {
     if (id) {
-      removeFile(id, fileId)
-      if (previewUrls[fileId]) {
-        URL.revokeObjectURL(previewUrls[fileId])
-        setPreviewUrls((prev) => {
-          const next = { ...prev }
-          delete next[fileId]
-          return next
-        })
+      try {
+        await syncDeleteFile(id, fileId)
+      } catch {
+        setError(t('common.error'))
       }
     }
   }
@@ -124,11 +118,14 @@ export function UploadPage() {
           'relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors',
           isDragging
             ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+            : 'border-muted-foreground/25 hover:border-muted-foreground/50',
+          uploading && 'pointer-events-none opacity-50',
         )}
       >
         <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
-        <p className="mb-1 text-sm font-medium">{t('upload.dropzone')}</p>
+        <p className="mb-1 text-sm font-medium">
+          {uploading ? t('common.loading') : t('upload.dropzone')}
+        </p>
         <p className="mb-4 text-xs text-muted-foreground">{t('upload.supported_formats')}</p>
         <label>
           <input
@@ -137,8 +134,9 @@ export function UploadPage() {
             accept=".jpg,.jpeg,.png,.pdf"
             multiple
             onChange={handleFileInput}
+            disabled={uploading}
           />
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" disabled={uploading}>
             <span>{t('upload.dropzone')}</span>
           </Button>
         </label>
@@ -173,13 +171,14 @@ export function UploadPage() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {file.previewUrl && (
-                    <img
-                      src={file.previewUrl}
-                      alt={file.fileName}
-                      className="mb-2 h-32 w-full rounded-md object-cover"
-                    />
-                  )}
+                  <img
+                    src={getPreviewUrl(file.id)}
+                    alt={file.fileName}
+                    className="mb-2 h-32 w-full rounded-md object-cover"
+                    onError={(e) => {
+                      ;(e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>{file.fileType}</span>
                     <span>{(file.fileSize / 1024 / 1024).toFixed(1)} MB</span>
