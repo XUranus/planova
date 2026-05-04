@@ -52,8 +52,10 @@
     "open_glb": "Open GLB File",
     "screenshot": "Screenshot",
     "no_model": "No model loaded",
-    "open_model_hint": "Open a GLB file to view the 3D scene",
-    "loading": "Loading model..."
+    "open_model_hint": "Open a GLB file or load a demo scene to view 3D",
+    "loading": "Loading model...",
+    "walk_hint": "to move",
+    "exit_walk": "to exit"
   },
   "styles": {
     "modern_luxury": "Modern Luxury",
@@ -96,5 +98,11 @@
   "status_bar": {
     "ready": "Ready",
     "offline": "Offline"
+  },
+  "demo": {
+    "title": "Demo Scenes",
+    "studio": "Studio Apartment",
+    "two_bedroom": "Two-Bedroom Apartment",
+    "clear": "Clear Scene"
   }
 }

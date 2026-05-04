@@ -52,8 +52,10 @@
     "open_glb": "打开 GLB 文件",
     "screenshot": "截图",
     "no_model": "未加载模型",
-    "open_model_hint": "打开一个 GLB 文件以查看 3D 场景",
-    "loading": "正在加载模型..."
+    "open_model_hint": "打开 GLB 文件或加载演示场景以查看 3D",
+    "loading": "正在加载模型...",
+    "walk_hint": "移动",
+    "exit_walk": "退出"
   },
   "styles": {
     "modern_luxury": "现代轻奢",
@@ -96,5 +98,11 @@
   "status_bar": {
     "ready": "就绪",
     "offline": "离线"
+  },
+  "demo": {
+    "title": "演示场景",
+    "studio": "一居室公寓",
+    "two_bedroom": "两居室公寓",
+    "clear": "清除场景"
   }
 }

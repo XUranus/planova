@@ -19,13 +19,16 @@ export function ViewerToolbar() {
     fileInputRef.current?.click()
   }, [])
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const url = URL.createObjectURL(file)
-      setSceneUrl(url)
-    }
-  }, [setSceneUrl])
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) {
+        const url = URL.createObjectURL(file)
+        setSceneUrl(url)
+      }
+    },
+    [setSceneUrl]
+  )
 
   const handleScreenshot = useCallback(() => {
     const canvas = document.querySelector('canvas')
@@ -43,8 +46,16 @@ export function ViewerToolbar() {
       {/* Mode selector */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant={mode === 'orbit' ? 'secondary' : 'ghost'} size="sm" className="gap-1.5">
-            <Orbit className="h-4 w-4" />
+          <Button
+            variant={mode === 'orbit' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="gap-1.5"
+          >
+            {mode === 'walk' ? (
+              <Move3D className="h-4 w-4" />
+            ) : (
+              <Orbit className="h-4 w-4" />
+            )}
             <span className="text-xs">{t(`viewer.${mode}_mode`)}</span>
           </Button>
         </DropdownMenuTrigger>
@@ -53,7 +64,7 @@ export function ViewerToolbar() {
             <Orbit className="mr-2 h-4 w-4" />
             {t('viewer.orbit_mode')}
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setMode('walk')} disabled>
+          <DropdownMenuItem onClick={() => setMode('walk')}>
             <Move3D className="mr-2 h-4 w-4" />
             {t('viewer.walk_mode')}
           </DropdownMenuItem>
@@ -76,12 +87,17 @@ export function ViewerToolbar() {
       />
 
       {/* Screenshot */}
-      <Button variant="ghost" size="sm" onClick={handleScreenshot} className="gap-1.5">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleScreenshot}
+        className="gap-1.5"
+      >
         <Camera className="h-4 w-4" />
         <span className="text-xs">{t('viewer.screenshot')}</span>
       </Button>
 
-      {/* Reset camera - placeholder for now */}
+      {/* Reset camera - placeholder */}
       <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
         <RotateCcw className="h-4 w-4" />
       </Button>
