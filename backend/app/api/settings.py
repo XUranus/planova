@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.services.settings_service import get_settings, update_settings, mask_api_key
+from app.services.settings_service import get_settings, update_settings, mask_api_key, test_llm_connection
 
 router = APIRouter()
 
@@ -25,3 +25,9 @@ async def read_settings():
 async def write_settings(data: dict):
     updated = update_settings(data)
     return _mask_response(updated)
+
+
+@router.post("/settings/test")
+async def test_llm():
+    """Test LLM connection: API reachability, model availability, multimodal capability."""
+    return await test_llm_connection()

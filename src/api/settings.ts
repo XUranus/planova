@@ -1,4 +1,4 @@
-import { get, put } from './client'
+import { get, put, post } from './client'
 
 export interface LlmProvider {
   base_url: string
@@ -62,4 +62,18 @@ export async function updateSettings(data: Partial<SettingsData>): Promise<Setti
     // Backend unavailable — return local copy
     return merged
   }
+}
+
+export interface LlmTestResult {
+  success: boolean
+  api_reachable: boolean
+  model_available: boolean
+  multimodal_capable: boolean
+  latency_ms: number
+  error: string | null
+  details: Record<string, unknown>
+}
+
+export async function testLlmConnection(): Promise<LlmTestResult> {
+  return post<LlmTestResult>('/api/settings/test', {})
 }

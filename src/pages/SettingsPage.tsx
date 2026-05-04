@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, Save, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Save, Loader2, Zap, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { getSettings, updateSettings, type SettingsData } from '@/api/settings'
+import { getSettings, updateSettings, testLlmConnection, type SettingsData, type LlmTestResult } from '@/api/settings'
 
 const LLM_MODELS = [
   'mimo-v2.5',
@@ -13,6 +13,19 @@ const LLM_MODELS = [
   'mimo-v2-pro',
   'mimo-v2-omni',
 ]
+
+function StatusRow({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className="flex items-center gap-1">
+      {ok ? (
+        <CheckCircle2 className="h-4 w-4 text-green-500" />
+      ) : (
+        <XCircle className="h-4 w-4 text-destructive" />
+      )}
+      <span className={ok ? 'text-green-700 dark:text-green-400' : 'text-destructive'}>{label}</span>
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -23,6 +36,8 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<LlmTestResult | null>(null)
 
   const loadSettings = useCallback(async () => {
     try {
@@ -55,6 +70,23 @@ export function SettingsPage() {
       setMessage({ type: 'error', text: t('settings.save_failed') })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    setMessage(null)
+    try {
+      const result = await testLlmConnection()
+      setTestResult(result)
+      if (!result.success) {
+        setMessage({ type: 'error', text: result.error || t('settings.test_failed') })
+      }
+    } catch {
+      setMessage({ type: 'error', text: t('settings.test_failed') })
+    } finally {
+      setTesting(false)
     }
   }
 
@@ -130,10 +162,37 @@ export function SettingsPage() {
             </div>
           )}
 
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {t('settings.save')}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              {t('settings.save')}
+            </Button>
+            <Button variant="outline" onClick={handleTest} disabled={testing || !baseUrl || !apiKey}>
+              {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+              {t('settings.test_connection')}
+            </Button>
+          </div>
+
+          {testResult && (
+            <div className="rounded-md border p-4 space-y-2">
+              <h4 className="text-sm font-medium">{t('settings.test_results')}</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <StatusRow label={t('settings.test_api')} ok={testResult.api_reachable} />
+                <StatusRow label={t('settings.test_model')} ok={testResult.model_available} />
+                <StatusRow label={t('settings.test_multimodal')} ok={testResult.multimodal_capable} />
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">{t('settings.test_latency')}:</span>
+                  <span className="font-mono">{testResult.latency_ms}ms</span>
+                </div>
+              </div>
+              {testResult.error && (
+                <div className="flex items-center gap-1 text-xs text-destructive">
+                  <AlertTriangle className="h-3 w-3" />
+                  {testResult.error}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

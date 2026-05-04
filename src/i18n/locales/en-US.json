@@ -122,7 +122,14 @@
     "model": "Model",
     "save": "Save Settings",
     "save_success": "Settings saved successfully",
-    "save_failed": "Failed to save settings"
+    "save_failed": "Failed to save settings",
+    "test_connection": "Test Connection",
+    "test_results": "Connection Test Results",
+    "test_api": "API Reachable",
+    "test_model": "Model Available",
+    "test_multimodal": "Multimodal",
+    "test_latency": "Latency",
+    "test_failed": "Connection test failed"
   },
   "demo": {
     "title": "Demo Scenes",

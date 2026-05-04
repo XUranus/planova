@@ -122,7 +122,14 @@
     "model": "模型",
     "save": "保存设置",
     "save_success": "设置已保存",
-    "save_failed": "保存设置失败"
+    "save_failed": "保存设置失败",
+    "test_connection": "测试连接",
+    "test_results": "连接测试结果",
+    "test_api": "API 可达",
+    "test_model": "模型可用",
+    "test_multimodal": "多模态",
+    "test_latency": "延迟",
+    "test_failed": "连接测试失败"
   },
   "demo": {
     "title": "演示场景",
