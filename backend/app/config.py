@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o"
     openai_base_url: str = "https://api.openai.com/v1"
 
+    # Data
+    data_dir: Path = Path("./data")
+
     # Scene defaults
     default_ceiling_height: float = 2.8
     default_wall_thickness: float = 0.2

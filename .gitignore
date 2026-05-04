@@ -32,3 +32,8 @@ __pycache__
 *.pyo
 .venv
 *.db
+
+# Backend runtime data
+backend/data/
+backend/uploads/
+backend/previews/

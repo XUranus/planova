@@ -106,6 +106,16 @@
     "completed": "Scene generated successfully",
     "pending": "Waiting to start..."
   },
+  "settings": {
+    "title": "Settings",
+    "llm_provider": "LLM Provider",
+    "base_url": "Base URL",
+    "api_key": "API Key",
+    "model": "Model",
+    "save": "Save Settings",
+    "save_success": "Settings saved successfully",
+    "save_failed": "Failed to save settings"
+  },
   "demo": {
     "title": "Demo Scenes",
     "studio": "Studio Apartment",

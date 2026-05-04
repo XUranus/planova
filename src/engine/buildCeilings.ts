@@ -1,26 +1,32 @@
 import * as THREE from 'three'
-import type { Room } from '@/types/scene'
+import type { Room, SceneMaterial } from '@/types/scene'
 import { createPolygonGeometry } from './geometryUtils'
-import { createCeilingMaterial } from './materials'
+import { createCeilingMaterial, getMaterialById } from './materials'
 
 export interface BuiltCeiling {
   id: string
   mesh: THREE.Mesh
 }
 
-/**
- * Build ceiling meshes from room definitions.
- * Ceilings are placed at the global ceiling height.
- */
-export function buildCeilings(rooms: Room[], ceilingHeight: number): BuiltCeiling[] {
-  const material = createCeilingMaterial()
-
+export function buildCeilings(
+  rooms: Room[],
+  ceilingHeight: number,
+  materials: SceneMaterial[] = [],
+): BuiltCeiling[] {
   return rooms.map((room) => {
     const geometry = createPolygonGeometry(room.polygon)
+
+    let material: THREE.MeshStandardMaterial
+    if (room.ceiling_material) {
+      const found = getMaterialById(materials, room.ceiling_material)
+      material = found ?? createCeilingMaterial()
+    } else {
+      material = createCeilingMaterial()
+    }
+
     const mesh = new THREE.Mesh(geometry, material)
     mesh.name = `ceiling_${room.id}`
     mesh.position.y = ceilingHeight
-    // Flip normal so it faces downward
     mesh.scale.y = -1
     mesh.receiveShadow = true
 

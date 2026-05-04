@@ -106,6 +106,16 @@
     "completed": "场景生成成功",
     "pending": "等待开始..."
   },
+  "settings": {
+    "title": "设置",
+    "llm_provider": "LLM 提供商",
+    "base_url": "基础 URL",
+    "api_key": "API 密钥",
+    "model": "模型",
+    "save": "保存设置",
+    "save_success": "设置已保存",
+    "save_failed": "保存设置失败"
+  },
   "demo": {
     "title": "演示场景",
     "studio": "一居室公寓",

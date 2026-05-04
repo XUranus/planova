@@ -93,6 +93,8 @@ export interface SceneMaterial {
   base_color: string
   roughness: number
   metalness: number
+  transparent?: boolean
+  opacity?: number
   texture_urls?: {
     base_color?: string
     normal?: string

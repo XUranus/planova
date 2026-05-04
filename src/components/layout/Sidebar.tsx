@@ -79,8 +79,12 @@ export function Sidebar() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Settings placeholder */}
-        <Button variant="ghost" className="w-full justify-start gap-2" disabled>
+        {/* Settings */}
+        <Button
+          variant={location.pathname === '/settings' ? 'secondary' : 'ghost'}
+          className="w-full justify-start gap-2"
+          onClick={() => navigate('/settings')}
+        >
           <Settings className="h-4 w-4" />
           {t('nav.settings')}
         </Button>

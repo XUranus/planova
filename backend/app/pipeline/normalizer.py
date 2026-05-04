@@ -39,6 +39,9 @@ def normalize_scene(
     # Normalize openings (doors + windows)
     norm_openings = _normalize_openings(doors, windows, meters_per_pixel, norm_walls)
 
+    # Generate materials from style
+    materials = _generate_materials(style, norm_rooms)
+
     # Generate camera presets
     cameras = _generate_cameras(norm_rooms, ceiling_height)
 
@@ -61,7 +64,7 @@ def normalize_scene(
         "walls": norm_walls,
         "openings": norm_openings,
         "objects": [],
-        "materials": [],
+        "materials": materials,
         "lights": lights,
         "cameras": cameras,
     }
@@ -337,3 +340,107 @@ def _generate_lights(rooms: list[dict], ceiling_height: float) -> list[dict]:
         })
 
     return lights
+
+
+# Style palette definitions (mirrors frontend src/data/stylePalettes.ts)
+STYLE_PALETTES = {
+    "modern_luxury": {
+        "wall": {"base_color": "#C8C0B8", "roughness": 0.85, "metalness": 0.0},
+        "ceiling": {"base_color": "#F0EDE8", "roughness": 0.9, "metalness": 0.0},
+        "door": {"base_color": "#4A3728", "roughness": 0.5, "metalness": 0.1},
+        "window": {"base_color": "#B5D4E8", "roughness": 0.1, "metalness": 0.0},
+        "floor": {
+            "living_room": {"base_color": "#6B4F3A", "roughness": 0.6, "metalness": 0.0},
+            "bedroom": {"base_color": "#7A6050", "roughness": 0.65, "metalness": 0.0},
+            "kitchen": {"base_color": "#8A8078", "roughness": 0.5, "metalness": 0.05},
+            "bathroom": {"base_color": "#A0A0A0", "roughness": 0.3, "metalness": 0.0},
+            "dining_room": {"base_color": "#6B4F3A", "roughness": 0.6, "metalness": 0.0},
+            "corridor": {"base_color": "#6B4F3A", "roughness": 0.6, "metalness": 0.0},
+            "study": {"base_color": "#5A4A3A", "roughness": 0.6, "metalness": 0.0},
+            "balcony": {"base_color": "#9A9088", "roughness": 0.4, "metalness": 0.0},
+        },
+    },
+    "cream": {
+        "wall": {"base_color": "#F5F0E6", "roughness": 0.9, "metalness": 0.0},
+        "ceiling": {"base_color": "#FFFFFF", "roughness": 0.95, "metalness": 0.0},
+        "door": {"base_color": "#B89B71", "roughness": 0.55, "metalness": 0.0},
+        "window": {"base_color": "#C8DDE8", "roughness": 0.15, "metalness": 0.0},
+        "floor": {
+            "living_room": {"base_color": "#D4B896", "roughness": 0.65, "metalness": 0.0},
+            "bedroom": {"base_color": "#DEC8A8", "roughness": 0.7, "metalness": 0.0},
+            "kitchen": {"base_color": "#E0D8C8", "roughness": 0.45, "metalness": 0.0},
+            "bathroom": {"base_color": "#D8D0C8", "roughness": 0.3, "metalness": 0.0},
+            "dining_room": {"base_color": "#D4B896", "roughness": 0.65, "metalness": 0.0},
+            "corridor": {"base_color": "#D4B896", "roughness": 0.65, "metalness": 0.0},
+            "study": {"base_color": "#C8B090", "roughness": 0.65, "metalness": 0.0},
+            "balcony": {"base_color": "#C0B8A8", "roughness": 0.4, "metalness": 0.0},
+        },
+    },
+    "nordic": {
+        "wall": {"base_color": "#EBEBEB", "roughness": 0.88, "metalness": 0.0},
+        "ceiling": {"base_color": "#F8F8F8", "roughness": 0.92, "metalness": 0.0},
+        "door": {"base_color": "#A89070", "roughness": 0.5, "metalness": 0.0},
+        "window": {"base_color": "#D0E4F0", "roughness": 0.08, "metalness": 0.0},
+        "floor": {
+            "living_room": {"base_color": "#C9B896", "roughness": 0.6, "metalness": 0.0},
+            "bedroom": {"base_color": "#D0C0A0", "roughness": 0.65, "metalness": 0.0},
+            "kitchen": {"base_color": "#D8D0C8", "roughness": 0.45, "metalness": 0.0},
+            "bathroom": {"base_color": "#E0E0E0", "roughness": 0.3, "metalness": 0.0},
+            "dining_room": {"base_color": "#C9B896", "roughness": 0.6, "metalness": 0.0},
+            "corridor": {"base_color": "#C9B896", "roughness": 0.6, "metalness": 0.0},
+            "study": {"base_color": "#B8A888", "roughness": 0.6, "metalness": 0.0},
+            "balcony": {"base_color": "#B0A898", "roughness": 0.4, "metalness": 0.0},
+        },
+    },
+}
+
+
+def _generate_materials(style: str, rooms: list[dict]) -> list[dict]:
+    """Generate PBR material definitions and assign material refs to rooms."""
+    palette = STYLE_PALETTES.get(style, STYLE_PALETTES["modern_luxury"])
+    materials = []
+
+    # Wall material
+    wall_id = f"mat_{style}_wall"
+    materials.append({
+        "id": wall_id, "type": "pbr", "name": f"{style} Wall",
+        **palette["wall"],
+    })
+
+    # Ceiling material
+    ceiling_id = f"mat_{style}_ceiling"
+    materials.append({
+        "id": ceiling_id, "type": "pbr", "name": f"{style} Ceiling",
+        **palette["ceiling"],
+    })
+
+    # Door material
+    materials.append({
+        "id": f"mat_{style}_door", "type": "pbr", "name": f"{style} Door",
+        **palette["door"],
+    })
+
+    # Window material
+    materials.append({
+        "id": f"mat_{style}_window", "type": "pbr", "name": f"{style} Window",
+        **palette["window"],
+    })
+
+    # Floor materials per room type used
+    used_types = {r.get("type", "living_room") for r in rooms}
+    for room_type in used_types:
+        floor_spec = palette["floor"].get(room_type, palette["floor"]["living_room"])
+        floor_id = f"mat_{style}_floor_{room_type}"
+        materials.append({
+            "id": floor_id, "type": "pbr", "name": f"{style} Floor {room_type}",
+            **floor_spec,
+        })
+
+    # Assign material refs to rooms
+    for room in rooms:
+        room_type = room.get("type", "living_room")
+        room["floor_material"] = f"mat_{style}_floor_{room_type}"
+        room["wall_material"] = wall_id
+        room["ceiling_material"] = ceiling_id
+
+    return materials

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import type { Room } from '@/types/scene'
+import type { Room, SceneMaterial } from '@/types/scene'
 import { createPolygonGeometry, computePolygonArea } from './geometryUtils'
-import { createFloorMaterial } from './materials'
+import { createFloorMaterial, getMaterialById } from './materials'
 
 export interface BuiltFloor {
   id: string
@@ -9,14 +9,18 @@ export interface BuiltFloor {
   area: number
 }
 
-/**
- * Build floor meshes from room definitions.
- * Each room floor is a separate mesh for future per-room material editing.
- */
-export function buildFloors(rooms: Room[]): BuiltFloor[] {
+export function buildFloors(rooms: Room[], materials: SceneMaterial[] = []): BuiltFloor[] {
   return rooms.map((room) => {
     const geometry = createPolygonGeometry(room.polygon)
-    const material = createFloorMaterial(room.floor_material)
+
+    let material: THREE.MeshStandardMaterial
+    if (room.floor_material) {
+      const found = getMaterialById(materials, room.floor_material)
+      material = found ?? createFloorMaterial(room.floor_material)
+    } else {
+      material = createFloorMaterial()
+    }
+
     const mesh = new THREE.Mesh(geometry, material)
     mesh.name = `floor_${room.id}`
     mesh.receiveShadow = true

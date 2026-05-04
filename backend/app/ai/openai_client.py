@@ -4,17 +4,20 @@ import re
 
 from openai import AsyncOpenAI
 
-from app.config import settings
 from app.ai.prompts import FLOORPLAN_PARSE_SYSTEM, FLOORPLAN_PARSE_USER
+from app.services.settings_service import get_llm_config
 
 
 async def parse_floor_plan_with_vlm(image_path: str) -> dict:
     """
-    Call OpenAI Vision API to parse a floor plan image.
+    Call an OpenAI-compatible Vision API to parse a floor plan image.
+    Reads LLM config at runtime from settings file (falls back to env vars).
     Returns the raw parsed dict from the VLM response.
     """
-    if not settings.openai_api_key:
-        raise ValueError("OpenAI API key not configured. Set PLANOVA_OPENAI_API_KEY.")
+    llm = get_llm_config()
+
+    if not llm["api_key"]:
+        raise ValueError("LLM API key not configured. Set it in Settings or PLANOVA_OPENAI_API_KEY.")
 
     # Read and encode image
     with open(image_path, "rb") as f:
@@ -30,12 +33,12 @@ async def parse_floor_plan_with_vlm(image_path: str) -> dict:
     }.get(suffix, "image/png")
 
     client = AsyncOpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.openai_base_url,
+        api_key=llm["api_key"],
+        base_url=llm["base_url"],
     )
 
     response = await client.chat.completions.create(
-        model=settings.openai_model,
+        model=llm["model"],
         messages=[
             {"role": "system", "content": FLOORPLAN_PARSE_SYSTEM},
             {

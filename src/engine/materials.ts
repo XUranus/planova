@@ -25,8 +25,22 @@ export function getMaterial(sceneMat?: SceneMaterial): THREE.MeshStandardMateria
     side: THREE.DoubleSide,
   })
 
+  if (sceneMat?.transparent) {
+    mat.transparent = true
+    mat.opacity = sceneMat.opacity ?? 0.4
+  }
+
   materialCache.set(key, mat)
   return mat
+}
+
+export function getMaterialById(
+  materials: SceneMaterial[],
+  id: string,
+): THREE.MeshStandardMaterial | null {
+  const found = materials.find((m) => m.id === id)
+  if (!found) return null
+  return getMaterial(found)
 }
 
 export function createWallMaterial(): THREE.MeshStandardMaterial {

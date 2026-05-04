@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.api import projects, files, tasks, scenes
+from app.api import projects, files, tasks, scenes, settings as settings_api
 
 
 @asynccontextmanager
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     # Startup
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.preview_dir.mkdir(parents=True, exist_ok=True)
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
     await init_db()
     yield
     # Shutdown (nothing to clean up)
@@ -46,6 +47,7 @@ app.include_router(projects.router, prefix="/api", tags=["projects"])
 app.include_router(files.router, prefix="/api", tags=["files"])
 app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 app.include_router(scenes.router, prefix="/api", tags=["scenes"])
+app.include_router(settings_api.router, prefix="/api", tags=["settings"])
 
 
 @app.get("/health")
