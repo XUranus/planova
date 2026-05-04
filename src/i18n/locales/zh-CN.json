@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "Planova",
+    "tagline": "AI 户型图转 3D 室内空间"
+  },
+  "nav": {
+    "dashboard": "项目面板",
+    "projects": "项目",
+    "settings": "设置"
+  },
+  "dashboard": {
+    "title": "项目",
+    "create_project": "新建项目",
+    "empty_title": "暂无项目",
+    "empty_description": "创建你的第一个项目开始使用。",
+    "delete_confirm": "确定要删除这个项目吗？",
+    "search_placeholder": "搜索项目..."
+  },
+  "project": {
+    "name": "项目名称",
+    "description": "描述",
+    "style": "风格",
+    "status": "状态",
+    "created_at": "创建时间",
+    "updated_at": "更新时间",
+    "actions": "操作",
+    "delete": "删除",
+    "edit": "编辑",
+    "open": "打开",
+    "upload": "上传户型图",
+    "viewer": "3D 浏览器",
+    "no_files": "尚未上传文件",
+    "upload_hint": "上传户型图以开始"
+  },
+  "upload": {
+    "title": "上传户型图",
+    "dropzone": "拖拽文件到此处，或点击浏览",
+    "supported_formats": "支持 JPG、PNG、PDF（最大 50MB）",
+    "file_too_large": "文件太大，最大允许 50MB。",
+    "invalid_format": "文件格式不正确，请上传 JPG、PNG 或 PDF。",
+    "upload_success": "文件上传成功",
+    "uploaded_files": "已上传文件",
+    "preview": "预览",
+    "remove": "移除"
+  },
+  "viewer": {
+    "title": "3D 浏览器",
+    "orbit_mode": "轨道",
+    "walk_mode": "漫游",
+    "edit_mode": "编辑",
+    "reset_camera": "重置视角",
+    "open_glb": "打开 GLB 文件",
+    "screenshot": "截图",
+    "no_model": "未加载模型",
+    "open_model_hint": "打开一个 GLB 文件以查看 3D 场景",
+    "loading": "正在加载模型..."
+  },
+  "styles": {
+    "modern_luxury": "现代轻奢",
+    "cream": "奶油风",
+    "nordic": "北欧",
+    "chinese": "新中式",
+    "wabi_sabi": "侘寂",
+    "industrial": "工业风"
+  },
+  "status": {
+    "draft": "草稿",
+    "generating": "生成中",
+    "completed": "已完成",
+    "error": "错误"
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "close": "关闭",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "version": "版本",
+    "language": "语言",
+    "theme": "主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "系统"
+  },
+  "create_dialog": {
+    "title": "创建新项目",
+    "name_label": "项目名称",
+    "name_placeholder": "我的室内设计",
+    "description_label": "描述",
+    "description_placeholder": "描述你的项目...",
+    "style_label": "装修风格",
+    "create": "创建项目"
+  },
+  "status_bar": {
+    "ready": "就绪",
+    "offline": "离线"
+  }
+}
