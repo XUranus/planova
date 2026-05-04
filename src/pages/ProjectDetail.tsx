@@ -11,6 +11,7 @@ import { useTaskStore } from '@/stores/taskStore'
 import type { TestSceneId } from '@/data/testScenes'
 import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
+import { MaterialPanel } from '@/components/viewer/MaterialPanel'
 
 const demoScenes: { id: TestSceneId; labelKey: string }[] = [
   { id: 'studio', labelKey: 'demo.studio' },
@@ -107,6 +108,7 @@ export function ProjectDetail() {
         <div className="relative flex-1">
           <SceneViewer />
           <ViewerToolbar />
+          <MaterialPanel />
         </div>
 
         {/* Right info panel */}

@@ -10,6 +10,8 @@ import { buildScene, disposeScene } from '@/engine/buildScene'
  */
 export function HomeSceneMesh() {
   const homeScene = useSceneStore((s) => s.homeScene)
+  const setBuiltObjects = useSceneStore((s) => s.setBuiltObjects)
+  const setBuiltGroup = useSceneStore((s) => s.setBuiltGroup)
   const { scene } = useThree()
   const groupRef = useRef<THREE.Group | null>(null)
 
@@ -22,6 +24,8 @@ export function HomeSceneMesh() {
     if (builtScene) {
       groupRef.current = builtScene.group
       scene.add(builtScene.group)
+      setBuiltObjects(builtScene.objects)
+      setBuiltGroup(builtScene.group)
     }
 
     return () => {
@@ -29,9 +33,11 @@ export function HomeSceneMesh() {
         scene.remove(builtScene.group)
         disposeScene(builtScene)
         groupRef.current = null
+        setBuiltObjects([])
+        setBuiltGroup(null)
       }
     }
-  }, [builtScene, scene])
+  }, [builtScene, scene, setBuiltObjects, setBuiltGroup])
 
   // Visibility toggle based on homeScene state
   useEffect(() => {

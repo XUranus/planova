@@ -1,6 +1,10 @@
 import { useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { RotateCcw, Camera, FolderOpen, Move3D, Orbit } from 'lucide-react'
+import * as THREE from 'three'
+import {
+  RotateCcw, Camera, FolderOpen, Move3D, Orbit, Pencil,
+  Move, RotateCw, Trash2, Download,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -9,10 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useViewerStore } from '@/stores/viewerStore'
+import { useSceneStore } from '@/stores/sceneStore'
+import { exportToGLB, downloadBlob } from '@/engine/exportScene'
 
 export function ViewerToolbar() {
   const { t } = useTranslation()
-  const { mode, setMode, setSceneUrl } = useViewerStore()
+  const { mode, setMode, setSceneUrl, transformMode, setTransformMode, selectedObjectId } = useViewerStore()
+  const builtGroup = useSceneStore((s) => s.builtGroup)
+  const homeScene = useSceneStore((s) => s.homeScene)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleOpenFile = useCallback(() => {
@@ -41,18 +49,57 @@ export function ViewerToolbar() {
     }
   }, [])
 
+  const handleExportGLB = useCallback(async () => {
+    if (!builtGroup) return
+    try {
+      const blob = await exportToGLB(builtGroup)
+      downloadBlob(blob, `planova-scene-${Date.now()}.glb`)
+    } catch {
+      // Export failed silently
+    }
+  }, [builtGroup])
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedObjectId || !homeScene) return
+    const store = useViewerStore.getState()
+    const sceneStore = useSceneStore.getState()
+
+    const builtObj = sceneStore.builtObjects.find((o) => o.id === selectedObjectId)
+    if (builtObj) {
+      // Remove mesh from builtGroup parent (the scene)
+      builtObj.mesh.parent?.remove(builtObj.mesh)
+      builtObj.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose()
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose())
+          } else {
+            child.material.dispose()
+          }
+        }
+      })
+    }
+
+    const updatedObjects = homeScene.objects.filter((o) => o.id !== selectedObjectId)
+    sceneStore.setHomeScene({ ...homeScene, objects: updatedObjects })
+    sceneStore.setBuiltObjects(sceneStore.builtObjects.filter((o) => o.id !== selectedObjectId))
+    store.selectObject(null)
+  }, [selectedObjectId, homeScene])
+
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur">
       {/* Mode selector */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant={mode === 'orbit' ? 'secondary' : 'ghost'}
+            variant={mode === 'edit' ? 'secondary' : mode === 'walk' ? 'secondary' : 'secondary'}
             size="sm"
             className="gap-1.5"
           >
             {mode === 'walk' ? (
               <Move3D className="h-4 w-4" />
+            ) : mode === 'edit' ? (
+              <Pencil className="h-4 w-4" />
             ) : (
               <Orbit className="h-4 w-4" />
             )}
@@ -68,8 +115,44 @@ export function ViewerToolbar() {
             <Move3D className="mr-2 h-4 w-4" />
             {t('viewer.walk_mode')}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setMode('edit')}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {t('viewer.edit_mode')}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Edit mode buttons */}
+      {mode === 'edit' && (
+        <>
+          <div className="mx-1 h-6 w-px bg-border" />
+          <Button
+            variant={transformMode === 'translate' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setTransformMode('translate')}
+            title="Move (M)"
+          >
+            <Move className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={transformMode === 'rotate' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setTransformMode('rotate')}
+            title="Rotate (R)"
+          >
+            <RotateCw className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDeleteSelected}
+            disabled={!selectedObjectId}
+            title="Delete (Del)"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </>
+      )}
 
       <div className="mx-1 h-6 w-px bg-border" />
 
@@ -96,6 +179,19 @@ export function ViewerToolbar() {
         <Camera className="h-4 w-4" />
         <span className="text-xs">{t('viewer.screenshot')}</span>
       </Button>
+
+      {/* Export GLB */}
+      {builtGroup && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleExportGLB}
+          className="gap-1.5"
+        >
+          <Download className="h-4 w-4" />
+          <span className="text-xs">{t('viewer.export_glb')}</span>
+        </Button>
+      )}
 
       {/* Reset camera - placeholder */}
       <Button variant="ghost" size="icon" className="h-8 w-8" disabled>

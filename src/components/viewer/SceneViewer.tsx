@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { HomeSceneMesh } from './HomeSceneMesh'
+import { ObjectEditor } from './ObjectEditor'
 import { WalkControls } from './WalkControls'
 
 function Model({ url }: { url: string }) {
@@ -69,6 +70,9 @@ function SceneContent() {
 
       {/* Home Scene geometry (Phase 2) */}
       {homeScene && <HomeSceneMesh />}
+
+      {/* Object editor (Phase 5) */}
+      <ObjectEditor />
 
       {/* Ground grid */}
       {showGrid && (
