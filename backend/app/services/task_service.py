@@ -142,7 +142,15 @@ async def run_generation_task(task_id: str, project_id: str, file_id: str, style
             await update_task_progress(db, task_id, 95, "running")
 
             # Complete task
-            await complete_task(db, task_id, {"scene_id": scene.id})
+            await complete_task(db, task_id, {
+                "scene_id": scene.id,
+                "pipeline_urls": {
+                    "preprocessed_image": f"/pipeline/{project_id}/preprocessed.png",
+                    "vlm_response": f"/pipeline/{project_id}/vlm_response.json",
+                    "scene_normalized": f"/pipeline/{project_id}/scene_normalized.json",
+                    "meta": f"/api/tasks/{task_id}/pipeline",
+                },
+            })
 
             # Update project status
             if project:

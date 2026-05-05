@@ -96,7 +96,7 @@ async def parse_floor_plan_with_vlm(image_path: str) -> dict:
         response = await client.chat.completions.create(
             model=llm["model"],
             messages=messages,
-            max_tokens=8192,
+            max_tokens=16384,
             temperature=0.1,
         )
 
@@ -155,7 +155,7 @@ async def parse_floor_plan_with_vlm(image_path: str) -> dict:
 
 
 def _extract_json(text: str) -> dict:
-    """Extract a JSON object from text, handling markdown code fences."""
+    """Extract a JSON object from text, handling markdown code fences and reasoning prefixes."""
     # Try direct parse first
     try:
         return json.loads(text)
@@ -170,6 +170,17 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
+    # Try finding JSON block starting with {"detected_rooms" (our schema)
+    schema_match = re.search(r'\{\s*"detected_rooms"', text)
+    if schema_match:
+        start = schema_match.start()
+        end = text.rfind("}")
+        if end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                pass
+
     # Try finding first { ... } block
     start = text.find("{")
     end = text.rfind("}")
@@ -179,4 +190,4 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    raise ValueError(f"Could not extract JSON from VLM response: {text[:200]}...")
+    raise ValueError(f"Could not extract JSON from VLM response ({len(text)} chars): {text[:300]}...")

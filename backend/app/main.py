@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,12 +17,21 @@ async def lifespan(app: FastAPI):
     # Startup
     setup_logging()
     logger.info("Planova backend starting on %s:%d", settings.host, settings.port)
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    settings.preview_dir.mkdir(parents=True, exist_ok=True)
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
-    Path("llm_audit").mkdir(parents=True, exist_ok=True)
+    logger.info("Data directory: %s", settings.data_dir)
+
+    # Create all runtime directories
+    for d in [settings.data_dir, settings.upload_dir, settings.preview_dir,
+              settings.log_dir, settings.audit_dir, settings.pipeline_dir]:
+        d.mkdir(parents=True, exist_ok=True)
+        logger.debug("Ensured directory: %s", d)
+
+    # Mount static files (must happen after dirs exist)
+    app.mount("/previews", StaticFiles(directory=str(settings.preview_dir)), name="previews")
+    app.mount("/uploads", StaticFiles(directory=str(settings.upload_dir)), name="uploads")
+    app.mount("/pipeline", StaticFiles(directory=str(settings.pipeline_dir)), name="pipeline")
+
     await init_db()
-    logger.info("Database initialized, upload_dir=%s", settings.upload_dir)
+    logger.info("Database initialized, all directories ready")
     yield
     logger.info("Planova backend shutting down")
 
@@ -42,12 +50,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount static files for previews
-if settings.preview_dir.exists():
-    app.mount("/previews", StaticFiles(directory=str(settings.preview_dir)), name="previews")
-if settings.upload_dir.exists():
-    app.mount("/uploads", StaticFiles(directory=str(settings.upload_dir)), name="uploads")
 
 # Register routers
 app.include_router(projects.router, prefix="/api", tags=["projects"])

@@ -1,6 +1,11 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.schemas.task import GenerateRequest, TaskResponse
 from app.services import task_service
@@ -47,3 +52,30 @@ async def cancel_task(task_id: str, db: AsyncSession = Depends(get_db)):
     if not cancelled:
         raise HTTPException(400, "Task cannot be cancelled")
     return {"ok": True}
+
+
+@router.get("/tasks/{task_id}/pipeline")
+async def get_task_pipeline(task_id: str, db: AsyncSession = Depends(get_db)):
+    """Get pipeline debug artifacts for a generation task."""
+    task = await task_service.get_task(db, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    project_id = task.project_id
+    pipeline_dir = settings.pipeline_dir / project_id
+    meta_path = pipeline_dir / "meta.json"
+
+    if not meta_path.exists():
+        raise HTTPException(404, "Pipeline artifacts not found. The task may not have generated yet.")
+
+    with open(meta_path, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    # Add URLs for previewable artifacts
+    meta["urls"] = {
+        "preprocessed_image": f"/pipeline/{project_id}/preprocessed.png",
+        "vlm_response": f"/pipeline/{project_id}/vlm_response.json",
+        "scene_normalized": f"/pipeline/{project_id}/scene_normalized.json",
+    }
+
+    return meta

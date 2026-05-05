@@ -1,15 +1,10 @@
 import json
-import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-AUDIT_DIR = Path("llm_audit")
+from app.logging_config import get_logger
 
-
-def _ensure_audit_dir() -> Path:
-    AUDIT_DIR.mkdir(parents=True, exist_ok=True)
-    return AUDIT_DIR
+logger = get_logger("ai.audit")
 
 
 def log_llm_call(
@@ -22,7 +17,10 @@ def log_llm_call(
 ) -> None:
     """Append an LLM call record to a daily JSONL audit log."""
     try:
-        audit_dir = _ensure_audit_dir()
+        from app.config import settings
+        audit_dir = settings.audit_dir
+        audit_dir.mkdir(parents=True, exist_ok=True)
+
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         filepath = audit_dir / f"llm_{date_str}.jsonl"
 
@@ -38,6 +36,7 @@ def log_llm_call(
 
         with open(filepath, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception:
-        # Audit logging should never break the main flow
-        pass
+
+        logger.debug("Audit logged to %s (%d chars response)", filepath, len(response_content))
+    except Exception as e:
+        logger.warning("Failed to write audit log: %s", e)
