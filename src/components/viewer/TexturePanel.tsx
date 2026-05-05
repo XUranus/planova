@@ -14,8 +14,7 @@ const CATEGORIES: { key: Category; i18nKey: string }[] = [
 ]
 
 /**
- * Inline texture selector for the right sidebar.
- * Shows texture presets grouped by surface category with preview thumbnails.
+ * Compact inline texture selector with horizontal scrolling per category.
  */
 export function TexturePanel() {
   const { t } = useTranslation()
@@ -47,7 +46,6 @@ export function TexturePanel() {
         },
       }
       setHomeScene(updated)
-      // Persist to backend (debounced by the store)
       saveScene()
     },
     [homeScene, currentOverrides, setHomeScene, saveScene],
@@ -60,18 +58,20 @@ export function TexturePanel() {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">{t('viewer.texture_panel')}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {CATEGORIES.map(({ key, i18nKey }) => {
           const categoryPresets = PRESETS.filter((p) => p.category === key)
           const selected = currentOverrides[key]
           return (
-            <div key={key} className="space-y-1">
-              <p className="text-[11px] font-medium text-muted-foreground">{t(i18nKey)}</p>
-              <div className="grid grid-cols-5 gap-1">
+            <div key={key} className="flex items-center gap-2">
+              <span className="w-10 shrink-0 text-[10px] font-medium text-muted-foreground">
+                {t(i18nKey)}
+              </span>
+              <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {/* None option */}
                 <button
                   onClick={() => handleSelect(key, null)}
-                  className={`flex h-10 w-full items-center justify-center rounded border text-[9px] transition-colors ${
+                  className={`flex h-8 shrink-0 items-center justify-center rounded border px-2 text-[9px] transition-colors ${
                     !selected
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-input hover:bg-accent'
@@ -84,7 +84,7 @@ export function TexturePanel() {
                   <button
                     key={preset.id}
                     onClick={() => handleSelect(key, preset.id)}
-                    className={`h-10 w-full overflow-hidden rounded border transition-colors ${
+                    className={`h-8 w-8 shrink-0 overflow-hidden rounded border transition-colors ${
                       selected === preset.id
                         ? 'border-primary ring-1 ring-primary'
                         : 'border-input hover:border-muted-foreground/50'

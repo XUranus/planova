@@ -13,8 +13,13 @@ function createApiError(status: number, message: string): ApiError {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${BASE_URL}${path}`
+  const headers: Record<string, string> = {}
+  // Only set Content-Type when there's a body
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json'
+  }
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { ...headers, ...(options?.headers as Record<string, string>) },
     ...options,
   })
 
