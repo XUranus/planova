@@ -1,6 +1,5 @@
 import { useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import * as THREE from 'three'
 import {
   RotateCcw, Camera, FolderOpen, Move3D, Orbit, Pencil,
   Move, RotateCw, Trash2, Download, Eye, EyeOff,
@@ -14,11 +13,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
+import { deleteObject } from '@/engine/deleteObject'
 import { exportToGLB, downloadBlob } from '@/engine/exportScene'
 
 export function ViewerToolbar() {
   const { t } = useTranslation()
-  const { mode, setMode, setSceneUrl, transformMode, setTransformMode, selectedObjectId, showCeilings, toggleCeilings } = useViewerStore()
+  const { mode, setMode, setSceneUrl, transformMode, setTransformMode, selectedObjectId, showCeilings, toggleCeilings, requestResetCamera } = useViewerStore()
   const builtGroup = useSceneStore((s) => s.builtGroup)
   const homeScene = useSceneStore((s) => s.homeScene)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -61,29 +61,12 @@ export function ViewerToolbar() {
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedObjectId || !homeScene) return
-    const store = useViewerStore.getState()
     const sceneStore = useSceneStore.getState()
-
-    const builtObj = sceneStore.builtObjects.find((o) => o.id === selectedObjectId)
-    if (builtObj) {
-      // Remove mesh from builtGroup parent (the scene)
-      builtObj.mesh.parent?.remove(builtObj.mesh)
-      builtObj.mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry.dispose()
-          if (Array.isArray(child.material)) {
-            child.material.forEach((m) => m.dispose())
-          } else {
-            child.material.dispose()
-          }
-        }
-      })
-    }
-
-    const updatedObjects = homeScene.objects.filter((o) => o.id !== selectedObjectId)
-    sceneStore.setHomeScene({ ...homeScene, objects: updatedObjects })
-    sceneStore.setBuiltObjects(sceneStore.builtObjects.filter((o) => o.id !== selectedObjectId))
-    store.selectObject(null)
+    const result = deleteObject(selectedObjectId, homeScene, sceneStore.builtObjects)
+    sceneStore.setHomeScene(result.homeScene)
+    sceneStore.setBuiltObjects(result.builtObjects)
+    useViewerStore.getState().selectObject(null)
+    sceneStore.saveScene()
   }, [selectedObjectId, homeScene])
 
   return (
@@ -92,7 +75,7 @@ export function ViewerToolbar() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant={mode === 'edit' ? 'secondary' : mode === 'walk' ? 'secondary' : 'secondary'}
+            variant="secondary"
             size="sm"
             className="gap-1.5"
           >
@@ -130,7 +113,7 @@ export function ViewerToolbar() {
             variant={transformMode === 'translate' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setTransformMode('translate')}
-            title="Move (M)"
+            title={t('viewer.move')}
           >
             <Move className="h-4 w-4" />
           </Button>
@@ -138,7 +121,7 @@ export function ViewerToolbar() {
             variant={transformMode === 'rotate' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => setTransformMode('rotate')}
-            title="Rotate (R)"
+            title={t('viewer.rotate')}
           >
             <RotateCw className="h-4 w-4" />
           </Button>
@@ -147,7 +130,7 @@ export function ViewerToolbar() {
             size="sm"
             onClick={handleDeleteSelected}
             disabled={!selectedObjectId}
-            title="Delete (Del)"
+            title={t('viewer.delete')}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -205,8 +188,14 @@ export function ViewerToolbar() {
         </Button>
       )}
 
-      {/* Reset camera - placeholder */}
-      <Button variant="ghost" size="icon" className="h-8 w-8" disabled>
+      {/* Reset camera */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={requestResetCamera}
+        title={t('viewer.reset_camera')}
+      >
         <RotateCcw className="h-4 w-4" />
       </Button>
     </div>

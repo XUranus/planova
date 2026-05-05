@@ -147,5 +147,22 @@
     "badge": "Demo",
     "built_in_desc": "Built-in demo scene",
     "clear": "Clear Scene"
+  },
+  "furniture": {
+    "sofa": "Sofa",
+    "coffee_table": "Coffee Table",
+    "tv_stand": "TV Stand",
+    "bed": "Bed",
+    "nightstand": "Nightstand",
+    "wardrobe": "Wardrobe",
+    "dining_table": "Dining Table",
+    "dining_chair": "Dining Chair",
+    "desk": "Desk",
+    "bookshelf": "Bookshelf",
+    "bathroom_sink": "Bathroom Sink",
+    "toilet": "Toilet",
+    "shower": "Shower",
+    "kitchen_counter": "Kitchen Counter",
+    "fridge": "Fridge"
   }
 }

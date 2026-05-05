@@ -8,7 +8,6 @@ import { useSceneStore } from '@/stores/sceneStore'
 import { HomeSceneMesh } from './HomeSceneMesh'
 import { ObjectEditor } from './ObjectEditor'
 import { WalkControls } from './WalkControls'
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 function Model({ url }: { url: string }) {
   const { scene } = useGLTF(url)
@@ -26,8 +25,17 @@ function Model({ url }: { url: string }) {
 function CameraController() {
   const mode = useViewerStore((s) => s.mode)
   const homeScene = useSceneStore((s) => s.homeScene)
+  const setOrbitControls = useViewerStore((s) => s.setOrbitControls)
+  const resetCameraToken = useViewerStore((s) => s.resetCameraToken)
   const { camera } = useThree()
-  const controlsRef = useRef<OrbitControlsImpl>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null)
+
+  // Register orbit controls ref to store
+  useEffect(() => {
+    setOrbitControls(controlsRef.current)
+    return () => setOrbitControls(null)
+  })
 
   // When a home scene loads, position camera and orbit target at the preset
   useEffect(() => {
@@ -41,6 +49,20 @@ function CameraController() {
       }
     }
   }, [homeScene, camera])
+
+  // Reset camera when token changes
+  useEffect(() => {
+    if (!controlsRef.current) return
+    const preset = homeScene?.cameras?.[0]
+    if (preset) {
+      camera.position.set(preset.position[0], preset.position[1], preset.position[2])
+      controlsRef.current.target.set(preset.target[0], preset.target[1], preset.target[2])
+    } else {
+      camera.position.set(8, 6, 8)
+      controlsRef.current.target.set(0, 0, 0)
+    }
+    controlsRef.current.update()
+  }, [resetCameraToken, homeScene, camera])
 
   if (mode === 'walk') {
     return <WalkControls />
@@ -133,6 +155,8 @@ export function SceneViewer() {
   const sceneUrl = useViewerStore((s) => s.sceneUrl)
   const homeScene = useSceneStore((s) => s.homeScene)
   const mode = useViewerStore((s) => s.mode)
+  const hoveredCategory = useViewerStore((s) => s.hoveredCategory)
+  const hoverScreenPos = useViewerStore((s) => s.hoverScreenPos)
   const showEmpty = !sceneUrl && !homeScene
 
   return (
@@ -151,6 +175,16 @@ export function SceneViewer() {
       {mode === 'walk' && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-background/80 px-4 py-2 text-sm text-muted-foreground backdrop-blur">
           WASD {t('viewer.walk_hint')} · Space {t('viewer.exit_walk')}
+        </div>
+      )}
+
+      {/* Furniture hover tooltip */}
+      {mode === 'edit' && hoveredCategory && hoverScreenPos && (
+        <div
+          className="pointer-events-none absolute z-50 -translate-x-1/2 -translate-y-full rounded bg-background/90 px-2 py-1 text-xs font-medium shadow-md backdrop-blur"
+          style={{ left: hoverScreenPos.x, top: hoverScreenPos.y - 8 }}
+        >
+          {t(`furniture.${hoveredCategory}`, hoveredCategory)}
         </div>
       )}
 

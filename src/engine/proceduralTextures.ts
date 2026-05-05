@@ -716,7 +716,6 @@ function generateGridTile(size: number): HTMLCanvasElement {
 
 function generateWoodGrainPreview(size: number): HTMLCanvasElement {
   const ctx = createCanvas(size)
-  const rand = seededRandom(2000)
 
   ctx.fillStyle = '#A07830'
   ctx.fillRect(0, 0, size, size)

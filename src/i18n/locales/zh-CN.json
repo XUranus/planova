@@ -147,5 +147,22 @@
     "badge": "演示",
     "built_in_desc": "内置演示场景",
     "clear": "清除场景"
+  },
+  "furniture": {
+    "sofa": "沙发",
+    "coffee_table": "茶几",
+    "tv_stand": "电视柜",
+    "bed": "床",
+    "nightstand": "床头柜",
+    "wardrobe": "衣柜",
+    "dining_table": "餐桌",
+    "dining_chair": "餐椅",
+    "desk": "书桌",
+    "bookshelf": "书架",
+    "bathroom_sink": "洗手台",
+    "toilet": "马桶",
+    "shower": "淋浴间",
+    "kitchen_counter": "厨房操作台",
+    "fridge": "冰箱"
   }
 }
