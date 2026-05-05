@@ -15,6 +15,7 @@ import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { deleteObject } from '@/engine/deleteObject'
 import { exportToGLB, downloadBlob } from '@/engine/exportScene'
+import { toast } from '@/stores/toastStore'
 
 export function ViewerToolbar() {
   const { t } = useTranslation()
@@ -39,25 +40,38 @@ export function ViewerToolbar() {
   )
 
   const handleScreenshot = useCallback(() => {
-    const canvas = document.querySelector('canvas')
-    if (canvas) {
-      const dataUrl = canvas.toDataURL('image/png')
-      const link = document.createElement('a')
-      link.download = `planova-screenshot-${Date.now()}.png`
-      link.href = dataUrl
-      link.click()
+    // Find the R3F WebGL canvas by checking for a WebGL context
+    const canvases = document.querySelectorAll('canvas')
+    let target: HTMLCanvasElement | null = null
+    for (const c of canvases) {
+      if (c.getContext('webgl2') || c.getContext('webgl')) {
+        target = c
+        break
+      }
     }
-  }, [])
+    if (!target) {
+      toast.error(t('viewer.screenshot') + ': no canvas found')
+      return
+    }
+    const dataUrl = target.toDataURL('image/png')
+    const link = document.createElement('a')
+    link.download = `planova-screenshot-${Date.now()}.png`
+    link.href = dataUrl
+    link.click()
+    toast.success(t('viewer.screenshot'))
+  }, [t])
 
   const handleExportGLB = useCallback(async () => {
     if (!builtGroup) return
     try {
       const blob = await exportToGLB(builtGroup)
       downloadBlob(blob, `planova-scene-${Date.now()}.glb`)
-    } catch {
-      // Export failed silently
+      toast.success(t('viewer.export_glb'))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`${t('viewer.export_glb')}: ${msg}`)
     }
-  }, [builtGroup])
+  }, [builtGroup, t])
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedObjectId || !homeScene) return
