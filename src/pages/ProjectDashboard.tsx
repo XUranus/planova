@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, FolderOpen } from 'lucide-react'
+import { Plus, Trash2, FolderOpen, Box } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useProjectStore } from '@/stores/projectStore'
 import type { ProjectStyle } from '@/types/project'
 import { PROJECT_STYLES } from '@/types/project'
+import { DEMO_PROJECTS } from '@/data/demoProjects'
 
 export function ProjectDashboard() {
   const { t } = useTranslation()
@@ -124,6 +125,41 @@ export function ProjectDashboard() {
         </Dialog>
       </div>
 
+      {/* Demo Scenes — always visible, not deletable */}
+      <div className="space-y-3">
+        <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Box className="h-4 w-4" />
+          {t('demo.section_title')}
+        </h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {DEMO_PROJECTS.map((demo) => (
+            <Card
+              key={demo.id}
+              className="cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => navigate(`/projects/${demo.id}`)}
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base">{t(`demo.${demo.id === 'test_studio' ? 'studio' : 'two_bedroom'}`)}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {t(`styles.${demo.style}`)}
+                    </CardDescription>
+                  </div>
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                    {t('demo.badge')}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{t('demo.built_in_desc')}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* User Projects */}
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <FolderOpen className="mb-4 h-16 w-16 text-muted-foreground" />

@@ -133,8 +133,11 @@
   },
   "demo": {
     "title": "演示场景",
+    "section_title": "演示场景",
     "studio": "一居室公寓",
     "two_bedroom": "两居室公寓",
+    "badge": "演示",
+    "built_in_desc": "内置演示场景",
     "clear": "清除场景"
   }
 }

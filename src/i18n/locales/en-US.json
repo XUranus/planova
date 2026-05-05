@@ -133,8 +133,11 @@
   },
   "demo": {
     "title": "Demo Scenes",
+    "section_title": "Demo Scenes",
     "studio": "Studio Apartment",
     "two_bedroom": "Two-Bedroom Apartment",
+    "badge": "Demo",
+    "built_in_desc": "Built-in demo scene",
     "clear": "Clear Scene"
   }
 }

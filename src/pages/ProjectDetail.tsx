@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, FolderOpen, Box, Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, FolderOpen, Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -9,15 +9,10 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { useTaskStore } from '@/stores/taskStore'
 import { toast } from '@/stores/toastStore'
-import type { TestSceneId } from '@/data/testScenes'
+import { DEMO_PROJECTS, isDemoProject, demoIdToSceneId } from '@/data/demoProjects'
 import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
-
-const demoScenes: { id: TestSceneId; labelKey: string }[] = [
-  { id: 'studio', labelKey: 'demo.studio' },
-  { id: 'twoBedroom', labelKey: 'demo.two_bedroom' },
-]
 
 export function ProjectDetail() {
   const { t } = useTranslation()
@@ -26,19 +21,25 @@ export function ProjectDetail() {
   const getProject = useProjectStore((s) => s.getProject)
   const getFiles = useProjectStore((s) => s.getFiles)
   const fetchFiles = useProjectStore((s) => s.fetchFiles)
-  const { homeScene, loadTestScene, clearScene, fetchScene } = useSceneStore()
+  const { loadTestScene, fetchScene } = useSceneStore()
   const { activeTasks, startGeneration } = useTaskStore()
 
-  const project = id ? getProject(id) : undefined
+  const isDemo = id ? isDemoProject(id) : false
+  const demoProject = isDemo ? DEMO_PROJECTS.find((d) => d.id === id) : undefined
+  const project = isDemo ? demoProject : id ? getProject(id) : undefined
   const files = id ? getFiles(id) : []
 
-  // Fetch files from backend on mount
+  // Fetch files from backend on mount (skip for demo projects)
   useEffect(() => {
-    if (id) {
-      fetchFiles(id)
-      fetchScene(id)
+    if (!id) return
+    if (isDemo) {
+      const sceneId = demoIdToSceneId(id)
+      if (sceneId) loadTestScene(sceneId)
+      return
     }
-  }, [id, fetchFiles, fetchScene])
+    fetchFiles(id)
+    fetchScene(id)
+  }, [id, isDemo, fetchFiles, fetchScene, loadTestScene])
 
   // Find active task for this project
   const activeTask = useMemo(() => {
@@ -95,14 +96,16 @@ export function ProjectDetail() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/projects/${id}/upload`)}
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {t('project.upload')}
-          </Button>
+          {!isDemo && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/projects/${id}/upload`)}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {t('project.upload')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -127,17 +130,21 @@ export function ProjectDetail() {
                 <span className="text-muted-foreground">{t('project.style')}</span>
                 <span>{t(`styles.${project.style}`)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  {t('upload.uploaded_files')}
-                </span>
-                <span>{files.length}</span>
-              </div>
+              {isDemo ? (
+                <p className="text-xs text-muted-foreground">{t('demo.built_in_desc')}</p>
+              ) : (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    {t('upload.uploaded_files')}
+                  </span>
+                  <span>{files.length}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Generate section */}
-          {files.length > 0 && (
+          {/* Generate section — only for user projects */}
+          {!isDemo && files.length > 0 && (
             <>
               <Separator className="my-4" />
               <Card>
@@ -191,46 +198,6 @@ export function ProjectDetail() {
               </Card>
             </>
           )}
-
-          <Separator className="my-4" />
-
-          {/* Demo scenes */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Box className="h-4 w-4" />
-                {t('demo.title')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {demoScenes.map((scene) => (
-                <Button
-                  key={scene.id}
-                  variant={
-                    homeScene?.project.id ===
-                    (scene.id === 'studio' ? 'test_studio' : 'test_2br')
-                      ? 'default'
-                      : 'outline'
-                  }
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => loadTestScene(scene.id)}
-                >
-                  {t(scene.labelKey)}
-                </Button>
-              ))}
-              {homeScene && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full text-muted-foreground"
-                  onClick={clearScene}
-                >
-                  {t('demo.clear')}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
