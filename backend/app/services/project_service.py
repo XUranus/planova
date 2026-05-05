@@ -41,9 +41,12 @@ async def delete_project(db: AsyncSession, project_id: str) -> bool:
     project = await db.get(Project, project_id)
     if not project:
         return False
-    # Delete associated files from disk
-    for f in project.files:
+    # Query files explicitly (avoid async lazy-load)
+    result = await db.execute(select(UploadedFile).where(UploadedFile.project_id == project_id))
+    for f in result.scalars().all():
         delete_file(f.storage_path)
+        if f.preview_path:
+            delete_file(f.preview_path)
     await db.delete(project)
     await db.commit()
     return True
