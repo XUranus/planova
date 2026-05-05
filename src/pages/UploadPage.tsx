@@ -16,7 +16,6 @@ export function UploadPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const getProject = useProjectStore((s) => s.getProject)
-  const getFiles = useProjectStore((s) => s.getFiles)
   const syncUploadFile = useProjectStore((s) => s.syncUploadFile)
   const syncDeleteFile = useProjectStore((s) => s.syncDeleteFile)
   const fetchFiles = useProjectStore((s) => s.fetchFiles)
@@ -26,7 +25,7 @@ export function UploadPage() {
   }, [id, fetchFiles])
 
   const project = id ? getProject(id) : undefined
-  const files = id ? getFiles(id) : []
+  const files = useProjectStore((s) => (id ? s.files[id] || [] : []))
 
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
