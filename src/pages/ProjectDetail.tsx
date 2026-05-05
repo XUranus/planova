@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, FolderOpen, Play, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react'
+import { Upload, Play, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectStore } from '@/stores/projectStore'
@@ -22,6 +22,8 @@ export function ProjectDetail() {
   const getProject = useProjectStore((s) => s.getProject)
   const getFiles = useProjectStore((s) => s.getFiles)
   const fetchFiles = useProjectStore((s) => s.fetchFiles)
+  const fetchProjects = useProjectStore((s) => s.fetchProjects)
+  const projects = useProjectStore((s) => s.projects)
   const { loadTestScene, fetchScene, homeScene } = useSceneStore()
   const { activeTasks, startGeneration } = useTaskStore()
 
@@ -41,6 +43,20 @@ export function ProjectDetail() {
     fetchFiles(id)
     fetchScene(id)
   }, [id, isDemo, fetchFiles, fetchScene, loadTestScene])
+
+  // Fetch projects if store is empty (e.g. after page refresh)
+  useEffect(() => {
+    if (!isDemo && projects.length === 0) {
+      fetchProjects()
+    }
+  }, [isDemo, projects.length, fetchProjects])
+
+  // Redirect to dashboard if project truly doesn't exist (after loading)
+  useEffect(() => {
+    if (!isDemo && id && projects.length > 0 && !getProject(id)) {
+      navigate('/', { replace: true })
+    }
+  }, [isDemo, id, projects, getProject, navigate])
 
   // Find active task for this project
   const activeTask = useMemo(() => {
@@ -76,14 +92,13 @@ export function ProjectDetail() {
     }
   }
 
+  // Show loading while fetching project data
+  if (!project && !isDemo) {
+    return null
+  }
+
   if (!project) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center py-20 text-center">
-        <FolderOpen className="mb-4 h-16 w-16 text-muted-foreground" />
-        <h2 className="mb-2 text-lg font-semibold">Project not found</h2>
-        <Button onClick={() => navigate('/')}>{t('nav.dashboard')}</Button>
-      </div>
-    )
+    return null
   }
 
   return (
