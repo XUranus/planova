@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, FolderOpen, Box } from 'lucide-react'
+import { ask } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -53,7 +54,8 @@ export function ProjectDashboard() {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    if (window.confirm(t('dashboard.delete_confirm'))) {
+    const confirmed = await ask(t('dashboard.delete_confirm'), { title: 'Planova', kind: 'warning' })
+    if (confirmed) {
       await syncDeleteProject(id)
     }
   }

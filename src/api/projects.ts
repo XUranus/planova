@@ -1,4 +1,4 @@
-import { get, post, patch, del } from './client'
+import { invoke } from '@tauri-apps/api/core'
 import type { Project, ProjectStyle } from '@/types/project'
 
 interface ProjectApi {
@@ -28,7 +28,7 @@ export async function createProject(data: {
   description: string
   style: ProjectStyle
 }): Promise<Project> {
-  const res = await post<ProjectApi>('/api/projects', {
+  const res = await invoke<ProjectApi>('create_project', {
     name: data.name,
     description: data.description,
     style: data.style,
@@ -37,12 +37,12 @@ export async function createProject(data: {
 }
 
 export async function getProjects(): Promise<Project[]> {
-  const res = await get<ProjectApi[]>('/api/projects')
+  const res = await invoke<ProjectApi[]>('list_projects')
   return res.map(fromApi)
 }
 
 export async function getProject(id: string): Promise<Project> {
-  const res = await get<ProjectApi>(`/api/projects/${id}`)
+  const res = await invoke<ProjectApi>('get_project', { projectId: id })
   return fromApi(res)
 }
 
@@ -50,10 +50,16 @@ export async function updateProject(
   id: string,
   data: Partial<Pick<Project, 'name' | 'description' | 'style' | 'status'>>,
 ): Promise<Project> {
-  const res = await patch<ProjectApi>(`/api/projects/${id}`, data)
+  const res = await invoke<ProjectApi>('update_project', {
+    projectId: id,
+    name: data.name ?? null,
+    description: data.description ?? null,
+    style: data.style ?? null,
+    status: data.status ?? null,
+  })
   return fromApi(res)
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  await del(`/api/projects/${id}`)
+  await invoke('delete_project', { projectId: id })
 }

@@ -13,7 +13,6 @@ import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
 import { TexturePanel } from '@/components/viewer/TexturePanel'
-import { getPreviewUrl } from '@/api/files'
 
 export function ProjectDetail() {
   const { t } = useTranslation()
@@ -153,7 +152,7 @@ export function ProjectDetail() {
                   }}
                 >
                   <img
-                    src={getPreviewUrl(files[0].id)}
+                    src={files[0].previewUrl || ''}
                     alt={t('project.floor_plan')}
                     className="h-full w-full object-contain"
                   />

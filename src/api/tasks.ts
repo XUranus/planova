@@ -1,4 +1,4 @@
-import { get, post } from './client'
+import { invoke } from '@tauri-apps/api/core'
 
 interface TaskApi {
   id: string
@@ -46,20 +46,21 @@ export async function startGeneration(
     wallThickness?: number
   },
 ): Promise<TaskInfo> {
-  const res = await post<TaskApi>(`/api/projects/${projectId}/generate`, {
-    file_id: data.fileId,
+  const res = await invoke<TaskApi>('start_generation', {
+    projectId,
+    fileId: data.fileId,
     style: data.style,
-    ceiling_height: data.ceilingHeight,
-    wall_thickness: data.wallThickness,
+    ceilingHeight: data.ceilingHeight ?? null,
+    wallThickness: data.wallThickness ?? null,
   })
   return fromApi(res)
 }
 
 export async function getTask(taskId: string): Promise<TaskInfo> {
-  const res = await get<TaskApi>(`/api/tasks/${taskId}`)
+  const res = await invoke<TaskApi>('get_task', { taskId })
   return fromApi(res)
 }
 
 export async function cancelTask(taskId: string): Promise<void> {
-  await post(`/api/tasks/${taskId}/cancel`)
+  await invoke('cancel_task', { taskId })
 }

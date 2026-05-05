@@ -41,6 +41,8 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const scene = await scenesApi.getScene(projectId)
     if (scene) {
       set({ homeScene: scene, projectId })
+    } else {
+      set({ homeScene: null, projectId })
     }
   },
 

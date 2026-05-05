@@ -1,4 +1,4 @@
-import { get, patch } from './client'
+import { invoke } from '@tauri-apps/api/core'
 import type { HomeSceneJSON } from '@/types/scene'
 
 interface SceneApi {
@@ -12,8 +12,8 @@ interface SceneApi {
 
 export async function getScene(projectId: string): Promise<HomeSceneJSON | null> {
   try {
-    const res = await get<SceneApi>(`/api/projects/${projectId}/scene`)
-    return res.scene_json
+    const res = await invoke<SceneApi | null>('get_scene', { projectId })
+    return res?.scene_json ?? null
   } catch {
     return null
   }
@@ -23,5 +23,5 @@ export async function updateScene(
   projectId: string,
   scene: HomeSceneJSON,
 ): Promise<void> {
-  await patch(`/api/projects/${projectId}/scene`, { scene_json: scene })
+  await invoke('update_scene', { projectId, sceneJson: scene })
 }

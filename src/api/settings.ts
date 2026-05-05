@@ -1,4 +1,4 @@
-import { get, put, post } from './client'
+import { invoke } from '@tauri-apps/api/core'
 
 export interface LlmProvider {
   base_url: string
@@ -35,8 +35,7 @@ const DEFAULTS: SettingsData = {
 
 export async function getSettings(): Promise<SettingsData> {
   try {
-    const remote = await get<SettingsData>('/api/settings')
-    // Sync remote to local cache
+    const remote = await invoke<SettingsData>('get_settings')
     saveLocal(remote)
     return remote
   } catch {
@@ -56,10 +55,9 @@ export async function updateSettings(data: Partial<SettingsData>): Promise<Setti
 
   // Try to sync to backend
   try {
-    const remote = await put<SettingsData>('/api/settings', merged)
+    const remote = await invoke<SettingsData>('update_settings', { data: merged })
     return remote
   } catch {
-    // Backend unavailable — return local copy
     return merged
   }
 }
@@ -75,5 +73,5 @@ export interface LlmTestResult {
 }
 
 export async function testLlmConnection(): Promise<LlmTestResult> {
-  return post<LlmTestResult>('/api/settings/test', {})
+  return invoke<LlmTestResult>('test_llm_connection')
 }

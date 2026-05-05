@@ -5,7 +5,6 @@ import { ArrowLeft, Upload, FileImage, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectStore } from '@/stores/projectStore'
-import { getPreviewUrl } from '@/api/files'
 import { cn } from '@/lib/utils'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
@@ -171,7 +170,7 @@ export function UploadPage() {
                 </CardHeader>
                 <CardContent>
                   <img
-                    src={getPreviewUrl(file.id)}
+                    src={file.previewUrl || ''}
                     alt={file.fileName}
                     className="mb-2 h-32 w-full rounded-md object-cover"
                     onError={(e) => {

@@ -95,7 +95,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   syncUploadFile: async (projectId, file) => {
     try {
-      const uploaded = await filesApi.uploadFile(projectId, file)
+      const uploaded = await filesApi.uploadFileObject(projectId, file)
       set((state) => {
         const projectFiles = state.files[projectId] || []
         return { files: { ...state.files, [projectId]: [...projectFiles, uploaded] } }
