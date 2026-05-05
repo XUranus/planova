@@ -14,8 +14,36 @@ import {
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { deleteObject } from '@/engine/deleteObject'
-import { exportToGLB, downloadBlob } from '@/engine/exportScene'
+import { exportToGLB } from '@/engine/exportScene'
 import { toast } from '@/stores/toastStore'
+
+/**
+ * Save a Blob to disk. Uses Tauri native save dialog if available,
+ * otherwise falls back to browser <a> download.
+ */
+async function saveBlob(blob: Blob, defaultName: string) {
+  try {
+    const { save } = await import('@tauri-apps/plugin-dialog')
+    const { writeFile } = await import('@tauri-apps/plugin-fs')
+    const filePath = await save({
+      defaultPath: defaultName,
+      filters: [{ name: defaultName.split('.').pop()?.toUpperCase() || 'File', extensions: [defaultName.split('.').pop() || ''] }],
+    })
+    if (!filePath) return // user cancelled
+    const data = new Uint8Array(await blob.arrayBuffer())
+    await writeFile(filePath, data)
+    toast.success(defaultName)
+  } catch {
+    // Not in Tauri — fallback to browser download
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = defaultName
+    link.click()
+    URL.revokeObjectURL(url)
+    toast.success(defaultName)
+  }
+}
 
 export function ViewerToolbar() {
   const { t } = useTranslation()
@@ -39,7 +67,7 @@ export function ViewerToolbar() {
     [setSceneUrl]
   )
 
-  const handleScreenshot = useCallback(() => {
+  const handleScreenshot = useCallback(async () => {
     // Find the R3F WebGL canvas by checking for a WebGL context
     const canvases = document.querySelectorAll('canvas')
     let target: HTMLCanvasElement | null = null
@@ -50,23 +78,20 @@ export function ViewerToolbar() {
       }
     }
     if (!target) {
-      toast.error(t('viewer.screenshot') + ': no canvas found')
+      toast.error('Screenshot: no canvas found')
       return
     }
     const dataUrl = target.toDataURL('image/png')
-    const link = document.createElement('a')
-    link.download = `planova-screenshot-${Date.now()}.png`
-    link.href = dataUrl
-    link.click()
-    toast.success(t('viewer.screenshot'))
-  }, [t])
+    const res = await fetch(dataUrl)
+    const blob = await res.blob()
+    await saveBlob(blob, `planova-screenshot-${Date.now()}.png`)
+  }, [])
 
   const handleExportGLB = useCallback(async () => {
     if (!builtGroup) return
     try {
       const blob = await exportToGLB(builtGroup)
-      downloadBlob(blob, `planova-scene-${Date.now()}.glb`)
-      toast.success(t('viewer.export_glb'))
+      await saveBlob(blob, `planova-scene-${Date.now()}.glb`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       toast.error(`${t('viewer.export_glb')}: ${msg}`)
