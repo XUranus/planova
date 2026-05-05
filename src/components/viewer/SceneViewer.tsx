@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, useGLTF, Center } from '@react-three/drei'
+import { OrbitControls, Grid, useGLTF, Center, Environment } from '@react-three/drei'
+import { EffectComposer, SSAO } from '@react-three/postprocessing'
 import { useTranslation } from 'react-i18next'
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
@@ -61,9 +62,23 @@ function SceneContent() {
 
   return (
     <>
-      <ambientLight intensity={0.6} />
+      {/* Environment map for realistic reflections on materials */}
+      <Environment preset="apartment" />
+
+      {/* Lights — ambient reduced since environment provides ambient lighting */}
+      <ambientLight intensity={0.3} />
       <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-      <directionalLight position={[-10, 10, -5]} intensity={0.25} />
+      <directionalLight position={[-10, 10, -5]} intensity={0.2} />
+
+      {/* Post-processing: SSAO for contact shadows and corner darkening */}
+      <EffectComposer multisampling={0}>
+        <SSAO
+          radius={0.05}
+          intensity={15}
+          luminanceInfluence={0.6}
+          bias={0.01}
+        />
+      </EffectComposer>
 
       {/* GLB model (Phase 1) */}
       {sceneUrl && !homeScene && <Model url={sceneUrl} />}
