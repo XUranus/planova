@@ -30,7 +30,9 @@
     "upload": "Upload Floor Plan",
     "viewer": "3D Viewer",
     "no_files": "No files uploaded yet",
-    "upload_hint": "Upload a floor plan to get started"
+    "upload_hint": "Upload a floor plan to get started",
+    "floor_plan": "Floor Plan",
+    "click_to_load": "Click to load scene"
   },
   "upload": {
     "title": "Upload Floor Plan",
@@ -67,7 +69,8 @@
     "texture_floor": "Floor",
     "texture_wall": "Wall",
     "texture_ceiling": "Ceiling",
-    "texture_none": "None"
+    "texture_none": "None",
+    "toggle_ceilings": "Toggle Ceilings"
   },
   "styles": {
     "modern_luxury": "Modern Luxury",

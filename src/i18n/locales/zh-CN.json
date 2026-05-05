@@ -30,7 +30,9 @@
     "upload": "上传户型图",
     "viewer": "3D 浏览器",
     "no_files": "尚未上传文件",
-    "upload_hint": "上传户型图以开始"
+    "upload_hint": "上传户型图以开始",
+    "floor_plan": "户型平面图",
+    "click_to_load": "点击加载场景"
   },
   "upload": {
     "title": "上传户型图",
@@ -67,7 +69,8 @@
     "texture_floor": "地面",
     "texture_wall": "墙面",
     "texture_ceiling": "天花板",
-    "texture_none": "无（纯色）"
+    "texture_none": "无（纯色）",
+    "toggle_ceilings": "切换天花板显示"
   },
   "styles": {
     "modern_luxury": "现代轻奢",

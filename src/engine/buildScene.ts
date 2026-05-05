@@ -75,13 +75,19 @@ export function buildScene(scene: HomeSceneJSON): BuiltScene {
   const group = new THREE.Group()
   group.name = `home_scene_${scene.project.id}`
 
+  // Structure group: floors + walls merged
+  const structureGroup = new THREE.Group()
+  structureGroup.name = 'structure'
+
   for (const floor of floors) {
-    group.add(floor.mesh)
+    structureGroup.add(floor.mesh)
   }
 
   for (const wall of walls) {
-    group.add(wall.mesh)
+    structureGroup.add(wall.mesh)
   }
+
+  group.add(structureGroup)
 
   for (const opening of openings) {
     group.add(opening.mesh)

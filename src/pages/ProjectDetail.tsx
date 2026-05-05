@@ -1,10 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, FolderOpen, Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, FolderOpen, Play, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { useProjectStore } from '@/stores/projectStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { useTaskStore } from '@/stores/taskStore'
@@ -14,6 +13,7 @@ import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
 import { TexturePanel } from '@/components/viewer/TexturePanel'
+import { getPreviewUrl } from '@/api/files'
 
 export function ProjectDetail() {
   const { t } = useTranslation()
@@ -22,7 +22,7 @@ export function ProjectDetail() {
   const getProject = useProjectStore((s) => s.getProject)
   const getFiles = useProjectStore((s) => s.getFiles)
   const fetchFiles = useProjectStore((s) => s.fetchFiles)
-  const { loadTestScene, fetchScene } = useSceneStore()
+  const { loadTestScene, fetchScene, homeScene } = useSceneStore()
   const { activeTasks, startGeneration } = useTaskStore()
 
   const isDemo = id ? isDemoProject(id) : false
@@ -117,15 +117,45 @@ export function ProjectDetail() {
           <SceneViewer />
           <ViewerToolbar />
           <MaterialPanel />
-          <TexturePanel />
         </div>
 
         {/* Right info panel */}
-        <div className="w-[280px] overflow-auto border-l p-4">
+        <div className="w-[280px] overflow-auto border-l p-4 space-y-4">
+          {/* Floor plan thumbnail */}
+          {files.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  {t('project.floor_plan')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className="relative aspect-[4/3] w-full overflow-hidden rounded border bg-muted cursor-pointer"
+                  onClick={() => {
+                    if (!homeScene && !isDemo && id) fetchScene(id)
+                  }}
+                >
+                  <img
+                    src={getPreviewUrl(files[0].id)}
+                    alt={t('project.floor_plan')}
+                    className="h-full w-full object-contain"
+                  />
+                  {!homeScene && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-xs text-muted-foreground">
+                      {t('project.click_to_load')}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Project info */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">{t('project.status')}</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">{t('project.status')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -147,59 +177,59 @@ export function ProjectDetail() {
 
           {/* Generate section — only for user projects */}
           {!isDemo && files.length > 0 && (
-            <>
-              <Separator className="my-4" />
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <Play className="h-4 w-4" />
-                    {t('generate.title')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {activeTask ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        {activeTask.status === 'running' && (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                        )}
-                        {activeTask.status === 'completed' && (
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        )}
-                        {activeTask.status === 'failed' && (
-                          <AlertCircle className="h-4 w-4 text-destructive" />
-                        )}
-                        <span>
-                          {activeTask.status === 'running' &&
-                            `${t('generate.progress')} ${activeTask.progress}%`}
-                          {activeTask.status === 'completed' && t('generate.completed')}
-                          {activeTask.status === 'failed' && `${t('common.error')}: ${activeTask.errorMessage}`}
-                          {activeTask.status === 'pending' && t('generate.pending')}
-                        </span>
-                      </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-xs">
+                  <Play className="h-3.5 w-3.5" />
+                  {t('generate.title')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {activeTask ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
                       {activeTask.status === 'running' && (
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full bg-primary transition-all duration-500"
-                            style={{ width: `${activeTask.progress}%` }}
-                          />
-                        </div>
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       )}
+                      {activeTask.status === 'completed' && (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      )}
+                      {activeTask.status === 'failed' && (
+                        <AlertCircle className="h-4 w-4 text-destructive" />
+                      )}
+                      <span>
+                        {activeTask.status === 'running' &&
+                          `${t('generate.progress')} ${activeTask.progress}%`}
+                        {activeTask.status === 'completed' && t('generate.completed')}
+                        {activeTask.status === 'failed' && `${t('common.error')}: ${activeTask.errorMessage}`}
+                        {activeTask.status === 'pending' && t('generate.pending')}
+                      </span>
                     </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      onClick={handleGenerate}
-                    >
-                      <Play className="mr-2 h-4 w-4" />
-                      {t('generate.start')}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            </>
+                    {activeTask.status === 'running' && (
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full bg-primary transition-all duration-500"
+                          style={{ width: `${activeTask.progress}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={handleGenerate}
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    {t('generate.start')}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           )}
+
+          {/* Texture selector — always visible when scene is loaded */}
+          {homeScene && <TexturePanel />}
         </div>
       </div>
     </div>

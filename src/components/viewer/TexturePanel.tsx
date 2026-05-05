@@ -1,9 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { PRESETS, generatePreviewDataURL } from '@/engine/proceduralTextures'
 import type { HomeSceneJSON } from '@/types/scene'
@@ -16,12 +13,15 @@ const CATEGORIES: { key: Category; i18nKey: string }[] = [
   { key: 'ceiling', i18nKey: 'viewer.texture_ceiling' },
 ]
 
+/**
+ * Inline texture selector for the right sidebar.
+ * Shows texture presets grouped by surface category with preview thumbnails.
+ */
 export function TexturePanel() {
   const { t } = useTranslation()
-  const showTexturePanel = useViewerStore((s) => s.showTexturePanel)
-  const toggleTexturePanel = useViewerStore((s) => s.toggleTexturePanel)
   const homeScene = useSceneStore((s) => s.homeScene)
   const setHomeScene = useSceneStore((s) => s.setHomeScene)
+  const saveScene = useSceneStore((s) => s.saveScene)
 
   const previews = useMemo(() => {
     const map: Record<string, string> = {}
@@ -47,32 +47,31 @@ export function TexturePanel() {
         },
       }
       setHomeScene(updated)
+      // Persist to backend (debounced by the store)
+      saveScene()
     },
-    [homeScene, currentOverrides, setHomeScene],
+    [homeScene, currentOverrides, setHomeScene, saveScene],
   )
 
-  if (!showTexturePanel || !homeScene) return null
+  if (!homeScene) return null
 
   return (
-    <Card className="absolute right-4 top-4 w-60 shadow-lg backdrop-blur">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xs">{t('viewer.texture_panel')}</CardTitle>
-        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={toggleTexturePanel}>
-          <X className="h-3 w-3" />
-        </Button>
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">{t('viewer.texture_panel')}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {CATEGORIES.map(({ key, i18nKey }) => {
           const categoryPresets = PRESETS.filter((p) => p.category === key)
           const selected = currentOverrides[key]
           return (
-            <div key={key} className="space-y-1.5">
+            <div key={key} className="space-y-1">
               <p className="text-[11px] font-medium text-muted-foreground">{t(i18nKey)}</p>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-5 gap-1">
                 {/* None option */}
                 <button
                   onClick={() => handleSelect(key, null)}
-                  className={`flex h-12 w-full items-center justify-center rounded border text-[10px] transition-colors ${
+                  className={`flex h-10 w-full items-center justify-center rounded border text-[9px] transition-colors ${
                     !selected
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-input hover:bg-accent'
@@ -85,7 +84,7 @@ export function TexturePanel() {
                   <button
                     key={preset.id}
                     onClick={() => handleSelect(key, preset.id)}
-                    className={`h-12 w-full overflow-hidden rounded border transition-colors ${
+                    className={`h-10 w-full overflow-hidden rounded border transition-colors ${
                       selected === preset.id
                         ? 'border-primary ring-1 ring-primary'
                         : 'border-input hover:border-muted-foreground/50'

@@ -9,19 +9,22 @@ interface SceneState {
   homeScene: HomeSceneJSON | null
   builtObjects: BuiltObject[]
   builtGroup: THREE.Group | null
+  projectId: string | null
 
   setHomeScene: (scene: HomeSceneJSON | null) => void
   setBuiltObjects: (objects: BuiltObject[]) => void
   setBuiltGroup: (group: THREE.Group | null) => void
   loadTestScene: (sceneId: TestSceneId) => void
   fetchScene: (projectId: string) => Promise<void>
+  saveScene: () => Promise<void>
   clearScene: () => void
 }
 
-export const useSceneStore = create<SceneState>((set) => ({
+export const useSceneStore = create<SceneState>((set, get) => ({
   homeScene: null,
   builtObjects: [],
   builtGroup: null,
+  projectId: null,
 
   setHomeScene: (scene) => set({ homeScene: scene }),
   setBuiltObjects: (objects) => set({ builtObjects: objects }),
@@ -30,16 +33,22 @@ export const useSceneStore = create<SceneState>((set) => ({
   loadTestScene: (sceneId) => {
     const scene = testScenes[sceneId]
     if (scene) {
-      set({ homeScene: scene })
+      set({ homeScene: scene, projectId: null })
     }
   },
 
   fetchScene: async (projectId) => {
     const scene = await scenesApi.getScene(projectId)
     if (scene) {
-      set({ homeScene: scene })
+      set({ homeScene: scene, projectId })
     }
   },
 
-  clearScene: () => set({ homeScene: null }),
+  saveScene: async () => {
+    const { homeScene, projectId } = get()
+    if (!homeScene || !projectId) return
+    await scenesApi.updateScene(projectId, homeScene)
+  },
+
+  clearScene: () => set({ homeScene: null, projectId: null }),
 }))

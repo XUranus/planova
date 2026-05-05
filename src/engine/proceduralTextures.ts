@@ -427,21 +427,314 @@ function generateCoffered(size: number): HTMLCanvasElement {
   return ctx.canvas
 }
 
+// ─── Additional Floor Presets ───────────────────────────────────────────
+
+function generateDarkWalnut(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1100)
+
+  ctx.fillStyle = '#3E2723'
+  ctx.fillRect(0, 0, size, size)
+
+  const plankHeight = size / 6
+  for (let row = 0; row < 6; row++) {
+    const y = row * plankHeight
+    const offset = row % 2 === 0 ? 0 : size / 4
+
+    const brightness = 0.85 + rand() * 0.3
+    const [r, g, b] = hexToRgb('#4E342E')
+    ctx.fillStyle = `rgb(${Math.round(r * brightness)}, ${Math.round(g * brightness)}, ${Math.round(b * brightness)})`
+    ctx.fillRect(0, y, size, plankHeight - 1)
+
+    // Wood grain
+    ctx.strokeStyle = `rgba(30, 15, 5, ${0.1 + rand() * 0.1})`
+    ctx.lineWidth = 0.5
+    for (let i = 0; i < 8; i++) {
+      const gy = y + rand() * plankHeight
+      ctx.beginPath()
+      ctx.moveTo(0, gy)
+      for (let x = 0; x < size; x += 3) {
+        ctx.lineTo(x, gy + Math.sin(x * 0.04 + rand() * 3) * 1.5)
+      }
+      ctx.stroke()
+    }
+
+    ctx.fillStyle = '#2C1A12'
+    ctx.fillRect(0, y + plankHeight - 1, size, 1)
+    if (offset > 0) {
+      ctx.fillRect(offset, y, 1, plankHeight)
+    }
+  }
+
+  addNoise(ctx, 0.03, 1101)
+  return ctx.canvas
+}
+
+function generateTerracotta(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1200)
+
+  ctx.fillStyle = '#C4704A'
+  ctx.fillRect(0, 0, size, size)
+
+  const tileSize = size / 4
+  const grout = 2
+
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      const x = col * tileSize
+      const y = row * tileSize
+
+      const hue = 0.9 + rand() * 0.2
+      const [r, g, b] = hexToRgb('#C4704A')
+      ctx.fillStyle = `rgb(${Math.min(255, Math.round(r * hue))}, ${Math.round(g * hue)}, ${Math.round(b * hue)})`
+      ctx.fillRect(x + grout, y + grout, tileSize - grout * 2, tileSize - grout * 2)
+
+      // Surface variation
+      for (let n = 0; n < 8; n++) {
+        const nx = x + grout + rand() * (tileSize - grout * 2)
+        const ny = y + grout + rand() * (tileSize - grout * 2)
+        ctx.fillStyle = `rgba(${rand() > 0.5 ? 255 : 0}, ${rand() > 0.5 ? 200 : 50}, ${rand() > 0.5 ? 150 : 30}, 0.04)`
+        ctx.beginPath()
+        ctx.arc(nx, ny, 3 + rand() * 5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  }
+
+  // Grout
+  ctx.fillStyle = '#A08878'
+  for (let i = 0; i <= 4; i++) {
+    ctx.fillRect(i * tileSize - grout / 2, 0, grout, size)
+    ctx.fillRect(0, i * tileSize - grout / 2, size, grout)
+  }
+
+  addNoise(ctx, 0.04, 1201)
+  return ctx.canvas
+}
+
+function generatePorcelainTile(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1300)
+
+  ctx.fillStyle = '#E8E4E0'
+  ctx.fillRect(0, 0, size, size)
+
+  const tileSize = size / 3
+  const grout = 1
+
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      const x = col * tileSize
+      const y = row * tileSize
+
+      const b = 0.95 + rand() * 0.1
+      const [r, g, bl] = hexToRgb('#E8E4E0')
+      ctx.fillStyle = `rgb(${Math.round(r * b)}, ${Math.round(g * b)}, ${Math.round(bl * b)})`
+      ctx.fillRect(x + grout, y + grout, tileSize - grout * 2, tileSize - grout * 2)
+
+      // Subtle vein
+      ctx.strokeStyle = `rgba(200, 195, 190, ${0.15 + rand() * 0.1})`
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(x + rand() * tileSize, y)
+      ctx.lineTo(x + rand() * tileSize, y + tileSize)
+      ctx.stroke()
+    }
+  }
+
+  ctx.fillStyle = '#D0CCC8'
+  for (let i = 0; i <= 3; i++) {
+    ctx.fillRect(i * tileSize, 0, grout, size)
+    ctx.fillRect(0, i * tileSize, size, grout)
+  }
+
+  addNoise(ctx, 0.015, 1301)
+  return ctx.canvas
+}
+
+// ─── Additional Wall Presets ────────────────────────────────────────────
+
+function generateExposedConcrete(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+
+  ctx.fillStyle = '#9E9A95'
+  ctx.fillRect(0, 0, size, size)
+
+  addNoise(ctx, 0.1, 1400)
+
+  // Form lines (horizontal)
+  const rand = seededRandom(1401)
+  for (let i = 0; i < 6; i++) {
+    const y = (i + 1) * size / 7 + (rand() - 0.5) * 10
+    ctx.strokeStyle = `rgba(120, 115, 110, ${0.15 + rand() * 0.1})`
+    ctx.lineWidth = 1 + rand()
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    for (let x = 0; x < size; x += 8) {
+      ctx.lineTo(x, y + (rand() - 0.5) * 2)
+    }
+    ctx.stroke()
+  }
+
+  // Pock marks
+  for (let i = 0; i < 40; i++) {
+    const x = rand() * size
+    const y = rand() * size
+    ctx.fillStyle = `rgba(140, 135, 130, ${0.08 + rand() * 0.1})`
+    ctx.beginPath()
+    ctx.arc(x, y, 1 + rand() * 3, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  return ctx.canvas
+}
+
+function generateWoodPanel(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1500)
+
+  ctx.fillStyle = '#A08060'
+  ctx.fillRect(0, 0, size, size)
+
+  const panelW = size / 5
+  const groove = 2
+
+  for (let col = 0; col < 5; col++) {
+    const x = col * panelW
+    const b = 0.85 + rand() * 0.3
+    const [r, g, b2] = hexToRgb('#A08060')
+    ctx.fillStyle = `rgb(${Math.round(r * b)}, ${Math.round(g * b)}, ${Math.round(b2 * b)})`
+    ctx.fillRect(x + groove, 0, panelW - groove * 2, size)
+
+    // Grain lines (vertical)
+    ctx.strokeStyle = `rgba(80, 55, 35, ${0.06 + rand() * 0.06})`
+    ctx.lineWidth = 0.5
+    for (let i = 0; i < 6; i++) {
+      const gx = x + groove + rand() * (panelW - groove * 2)
+      ctx.beginPath()
+      ctx.moveTo(gx, 0)
+      for (let y = 0; y < size; y += 5) {
+        ctx.lineTo(gx + Math.sin(y * 0.03 + rand()) * 1.5, y)
+      }
+      ctx.stroke()
+    }
+
+    // Groove shadow
+    ctx.fillStyle = '#6B5040'
+    ctx.fillRect(x + panelW - groove, 0, groove, size)
+  }
+
+  addNoise(ctx, 0.025, 1501)
+  return ctx.canvas
+}
+
+function generateStoneWall(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1600)
+
+  ctx.fillStyle = '#A09890'
+  ctx.fillRect(0, 0, size, size)
+
+  const stoneW = size / 4
+  const stoneH = size / 6
+  const mortar = 2
+
+  for (let row = 0; row < 6; row++) {
+    const offset = row % 2 === 0 ? 0 : stoneW / 2
+    for (let col = -1; col < 5; col++) {
+      const x = col * stoneW + offset
+      const y = row * stoneH
+
+      const b = 0.8 + rand() * 0.4
+      const [r, g, b2] = hexToRgb('#8A8278')
+      ctx.fillStyle = `rgb(${Math.round(r * b)}, ${Math.round(g * b)}, ${Math.round(b2 * b)})`
+      ctx.fillRect(x + mortar, y + mortar, stoneW - mortar * 2, stoneH - mortar * 2)
+
+      // Surface texture
+      for (let n = 0; n < 10; n++) {
+        const nx = x + mortar + rand() * (stoneW - mortar * 2)
+        const ny = y + mortar + rand() * (stoneH - mortar * 2)
+        ctx.fillStyle = `rgba(${rand() > 0.5 ? 200 : 100}, ${rand() > 0.5 ? 195 : 95}, ${rand() > 0.5 ? 190 : 90}, 0.06)`
+        ctx.beginPath()
+        ctx.arc(nx, ny, 2 + rand() * 4, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+  }
+
+  addNoise(ctx, 0.04, 1601)
+  return ctx.canvas
+}
+
+// ─── Additional Ceiling Presets ─────────────────────────────────────────
+
+function generateFlatWhite(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, size, size)
+
+  addNoise(ctx, 0.008, 1700)
+
+  return ctx.canvas
+}
+
+function generateGridTile(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(1800)
+
+  ctx.fillStyle = '#F5F5F3'
+  ctx.fillRect(0, 0, size, size)
+
+  const tileSize = size / 6
+  const grout = 1
+
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 6; col++) {
+      const x = col * tileSize
+      const y = row * tileSize
+
+      const b = 0.97 + rand() * 0.06
+      const [r, g, bl] = hexToRgb('#F5F5F3')
+      ctx.fillStyle = `rgb(${Math.round(r * b)}, ${Math.round(g * b)}, ${Math.round(bl * b)})`
+      ctx.fillRect(x + grout, y + grout, tileSize - grout * 2, tileSize - grout * 2)
+    }
+  }
+
+  ctx.fillStyle = '#E0DDD8'
+  for (let i = 0; i <= 6; i++) {
+    ctx.fillRect(i * tileSize, 0, grout, size)
+    ctx.fillRect(0, i * tileSize, size, grout)
+  }
+
+  addNoise(ctx, 0.01, 1801)
+  return ctx.canvas
+}
+
 // ─── Preset Registry ────────────────────────────────────────────────────
 
 export const PRESETS: TexturePreset[] = [
   // Floor
   { id: 'oak_plank', name: 'Oak Plank', category: 'floor', generate: generateOakPlank },
+  { id: 'dark_walnut', name: 'Dark Walnut', category: 'floor', generate: generateDarkWalnut },
   { id: 'marble_tile', name: 'Marble Tile', category: 'floor', generate: generateMarbleTile },
-  { id: 'concrete', name: 'Concrete', category: 'floor', generate: generateConcrete },
   { id: 'herringbone', name: 'Herringbone', category: 'floor', generate: generateHerringbone },
+  { id: 'terracotta', name: 'Terracotta', category: 'floor', generate: generateTerracotta },
+  { id: 'porcelain_tile', name: 'Porcelain', category: 'floor', generate: generatePorcelainTile },
+  { id: 'concrete', name: 'Concrete', category: 'floor', generate: generateConcrete },
   // Wall
   { id: 'white_plaster', name: 'White Plaster', category: 'wall', generate: generateWhitePlaster },
   { id: 'subway_tile', name: 'Subway Tile', category: 'wall', generate: generateSubwayTile },
   { id: 'brick', name: 'Brick', category: 'wall', generate: generateBrick },
+  { id: 'exposed_concrete', name: 'Exposed Concrete', category: 'wall', generate: generateExposedConcrete },
+  { id: 'wood_panel', name: 'Wood Panel', category: 'wall', generate: generateWoodPanel },
+  { id: 'stone_wall', name: 'Stone Wall', category: 'wall', generate: generateStoneWall },
   // Ceiling
   { id: 'smooth_white', name: 'Smooth White', category: 'ceiling', generate: generateSmoothWhite },
+  { id: 'flat_white', name: 'Flat White', category: 'ceiling', generate: generateFlatWhite },
   { id: 'coffered', name: 'Coffered', category: 'ceiling', generate: generateCoffered },
+  { id: 'grid_tile', name: 'Grid Tile', category: 'ceiling', generate: generateGridTile },
 ]
 
 // ─── Texture Cache ──────────────────────────────────────────────────────

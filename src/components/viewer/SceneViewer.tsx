@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, useGLTF, Center, Environment } from '@react-three/drei'
 import { EffectComposer, SSAO } from '@react-three/postprocessing'
@@ -8,6 +8,7 @@ import { useSceneStore } from '@/stores/sceneStore'
 import { HomeSceneMesh } from './HomeSceneMesh'
 import { ObjectEditor } from './ObjectEditor'
 import { WalkControls } from './WalkControls'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 function Model({ url }: { url: string }) {
   const { scene } = useGLTF(url)
@@ -26,13 +27,18 @@ function CameraController() {
   const mode = useViewerStore((s) => s.mode)
   const homeScene = useSceneStore((s) => s.homeScene)
   const { camera } = useThree()
+  const controlsRef = useRef<OrbitControlsImpl>(null)
 
-  // When a home scene loads, position camera at the first camera preset
+  // When a home scene loads, position camera and orbit target at the preset
   useEffect(() => {
     if (homeScene?.cameras?.[0]) {
       const preset = homeScene.cameras[0]
       camera.position.set(preset.position[0], preset.position[1], preset.position[2])
       camera.lookAt(preset.target[0], preset.target[1], preset.target[2])
+      if (controlsRef.current) {
+        controlsRef.current.target.set(preset.target[0], preset.target[1], preset.target[2])
+        controlsRef.current.update()
+      }
     }
   }, [homeScene, camera])
 
@@ -42,6 +48,7 @@ function CameraController() {
 
   return (
     <OrbitControls
+      ref={controlsRef}
       makeDefault
       enableDamping
       dampingFactor={0.05}
