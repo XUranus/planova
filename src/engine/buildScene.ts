@@ -8,6 +8,7 @@ import { buildObjects, type BuiltObject } from './buildObjects'
 import { clearMaterialCache } from './materials'
 import { clearTextureCache } from './proceduralTextures'
 import { furnitureCatalog } from '@/data/furnitureCatalog'
+import { createFurnitureModel } from './furnitureModels'
 
 export interface BuiltScene {
   group: THREE.Group
@@ -39,25 +40,10 @@ function applyTextureOverrides(
 }
 
 function buildObjectFromScene(obj: SceneObject): BuiltObject {
-  const group = new THREE.Group()
-  const [w, h, d] = obj.size
-
   const def = furnitureCatalog[obj.category]
-  const color = def?.color || '#888888'
+  const col = def?.color || '#888888'
 
-  const geometry = new THREE.BoxGeometry(w, h, d)
-  const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color),
-    roughness: 0.7,
-    metalness: 0.0,
-  })
-
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.position.y = h / 2
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-
-  group.add(mesh)
+  const group = createFurnitureModel(obj.category, obj.size, col)
   group.position.set(obj.position[0], obj.position[1], obj.position[2])
   group.rotation.set(obj.rotation[0], obj.rotation[1], obj.rotation[2])
   group.scale.set(obj.scale[0], obj.scale[1], obj.scale[2])

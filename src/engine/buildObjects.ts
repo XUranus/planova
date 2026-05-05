@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Room, Opening, SceneObject, Vec2, Vec3 } from '@/types/scene'
 import { furnitureCatalog, type FurnitureDef } from '@/data/furnitureCatalog'
 import { roomFurnitureMap, type PlacementZone } from '@/data/furnitureLayout'
+import { createFurnitureModel } from './furnitureModels'
 
 export interface BuiltObject {
   id: string
@@ -140,23 +141,7 @@ function getZonePosition(
 }
 
 function createFurnitureMesh(def: FurnitureDef): THREE.Group {
-  const group = new THREE.Group()
-  const [w, h, d] = def.size
-
-  const geometry = new THREE.BoxGeometry(w, h, d)
-  const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(def.color),
-    roughness: 0.7,
-    metalness: 0.0,
-  })
-
-  const mesh = new THREE.Mesh(geometry, material)
-  mesh.position.y = h / 2
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-
-  group.add(mesh)
-  return group
+  return createFurnitureModel(def.category, def.size, def.color)
 }
 
 let objectCounter = 0
