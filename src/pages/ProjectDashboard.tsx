@@ -15,7 +15,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useProjectStore } from '@/stores/projectStore'
-import { toast } from '@/stores/toastStore'
 import type { ProjectStyle } from '@/types/project'
 import { PROJECT_STYLES } from '@/types/project'
 import { DEMO_PROJECTS } from '@/data/demoProjects'
@@ -55,12 +54,7 @@ export function ProjectDashboard() {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     if (window.confirm(t('dashboard.delete_confirm'))) {
-      try {
-        await syncDeleteProject(id)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        toast.error(`${t('common.error')}: ${msg}`)
-      }
+      await syncDeleteProject(id)
     }
   }
 

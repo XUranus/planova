@@ -76,7 +76,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   syncDeleteProject: async (id) => {
-    await projectsApi.deleteProject(id)
+    try {
+      await projectsApi.deleteProject(id)
+    } catch (err) {
+      console.warn('[syncDeleteProject] API delete failed, removing locally:', err)
+    }
     set((state) => {
       const projects = state.projects.filter((p) => p.id !== id)
       const files = { ...state.files }
