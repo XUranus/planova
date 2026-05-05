@@ -8,16 +8,16 @@ export interface BuiltWall {
   mesh: THREE.Mesh
 }
 
-export function buildWalls(walls: Wall[], materials: SceneMaterial[] = []): BuiltWall[] {
+export function buildWalls(walls: Wall[], materials: SceneMaterial[] = [], textureOverride?: string): BuiltWall[] {
   return walls.map((wall) => {
     const geometry = createWallGeometry(wall)
 
     let material: THREE.MeshStandardMaterial
     if (wall.material) {
       const found = getMaterialById(materials, wall.material)
-      material = found ?? createWallMaterial()
+      material = found ?? createWallMaterial(textureOverride)
     } else {
-      material = createWallMaterial()
+      material = createWallMaterial(textureOverride)
     }
 
     const mesh = new THREE.Mesh(geometry, material)

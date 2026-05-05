@@ -9,12 +9,14 @@ interface ViewerState {
   transformMode: TransformMode
   sceneUrl: string | null
   isLoading: boolean
+  showTexturePanel: boolean
 
   setMode: (mode: ViewerMode) => void
   selectObject: (id: string | null) => void
   setTransformMode: (mode: TransformMode) => void
   setSceneUrl: (url: string | null) => void
   setLoading: (loading: boolean) => void
+  toggleTexturePanel: () => void
 }
 
 export const useViewerStore = create<ViewerState>((set) => ({
@@ -23,10 +25,12 @@ export const useViewerStore = create<ViewerState>((set) => ({
   transformMode: 'translate',
   sceneUrl: null,
   isLoading: false,
+  showTexturePanel: false,
 
   setMode: (mode) => set({ mode, selectedObjectId: null }),
   selectObject: (id) => set({ selectedObjectId: id }),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setSceneUrl: (url) => set({ sceneUrl: url }),
   setLoading: (loading) => set({ isLoading: loading }),
+  toggleTexturePanel: () => set((s) => ({ showTexturePanel: !s.showTexturePanel })),
 }))

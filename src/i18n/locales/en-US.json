@@ -62,7 +62,12 @@
     "export_glb": "Export GLB",
     "select_object": "Click an object to select",
     "material_panel": "Materials",
-    "no_selection": "No object selected"
+    "no_selection": "No object selected",
+    "texture_panel": "Textures",
+    "texture_floor": "Floor",
+    "texture_wall": "Wall",
+    "texture_ceiling": "Ceiling",
+    "texture_none": "None"
   },
   "styles": {
     "modern_luxury": "Modern Luxury",

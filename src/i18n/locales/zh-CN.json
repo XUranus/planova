@@ -62,7 +62,12 @@
     "export_glb": "导出GLB",
     "select_object": "点击物体以选中",
     "material_panel": "材质",
-    "no_selection": "未选中物体"
+    "no_selection": "未选中物体",
+    "texture_panel": "材质纹理",
+    "texture_floor": "地面",
+    "texture_wall": "墙面",
+    "texture_ceiling": "天花板",
+    "texture_none": "无（纯色）"
   },
   "styles": {
     "modern_luxury": "现代轻奢",

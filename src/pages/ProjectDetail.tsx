@@ -13,6 +13,7 @@ import { DEMO_PROJECTS, isDemoProject, demoIdToSceneId } from '@/data/demoProjec
 import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
+import { TexturePanel } from '@/components/viewer/TexturePanel'
 
 export function ProjectDetail() {
   const { t } = useTranslation()
@@ -116,6 +117,7 @@ export function ProjectDetail() {
           <SceneViewer />
           <ViewerToolbar />
           <MaterialPanel />
+          <TexturePanel />
         </div>
 
         {/* Right info panel */}

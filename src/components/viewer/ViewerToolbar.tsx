@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as THREE from 'three'
 import {
   RotateCcw, Camera, FolderOpen, Move3D, Orbit, Pencil,
-  Move, RotateCw, Trash2, Download,
+  Move, RotateCw, Trash2, Download, Palette,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,7 +18,7 @@ import { exportToGLB, downloadBlob } from '@/engine/exportScene'
 
 export function ViewerToolbar() {
   const { t } = useTranslation()
-  const { mode, setMode, setSceneUrl, transformMode, setTransformMode, selectedObjectId } = useViewerStore()
+  const { mode, setMode, setSceneUrl, transformMode, setTransformMode, selectedObjectId, showTexturePanel, toggleTexturePanel } = useViewerStore()
   const builtGroup = useSceneStore((s) => s.builtGroup)
   const homeScene = useSceneStore((s) => s.homeScene)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -155,6 +155,19 @@ export function ViewerToolbar() {
       )}
 
       <div className="mx-1 h-6 w-px bg-border" />
+
+      {/* Texture panel toggle */}
+      {homeScene && (
+        <Button
+          variant={showTexturePanel ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={toggleTexturePanel}
+          className="gap-1.5"
+        >
+          <Palette className="h-4 w-4" />
+          <span className="text-xs">{t('viewer.texture_panel')}</span>
+        </Button>
+      )}
 
       {/* Open GLB */}
       <Button variant="ghost" size="sm" onClick={handleOpenFile} className="gap-1.5">

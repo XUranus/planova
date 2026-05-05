@@ -1,11 +1,12 @@
 import * as THREE from 'three'
-import type { HomeSceneJSON, SceneObject } from '@/types/scene'
+import type { HomeSceneJSON, HomeSceneGlobal, SceneObject, SceneMaterial } from '@/types/scene'
 import { buildWalls, type BuiltWall } from './buildWalls'
 import { buildFloors, type BuiltFloor } from './buildFloors'
 import { buildCeilings, type BuiltCeiling } from './buildCeilings'
 import { buildOpenings, type BuiltOpening } from './buildOpenings'
 import { buildObjects, type BuiltObject } from './buildObjects'
 import { clearMaterialCache } from './materials'
+import { clearTextureCache } from './proceduralTextures'
 import { furnitureCatalog } from '@/data/furnitureCatalog'
 
 export interface BuiltScene {
@@ -15,6 +16,26 @@ export interface BuiltScene {
   ceilings: BuiltCeiling[]
   openings: BuiltOpening[]
   objects: BuiltObject[]
+}
+
+function applyTextureOverrides(
+  materials: SceneMaterial[],
+  overrides?: HomeSceneGlobal['texture_overrides'],
+): SceneMaterial[] {
+  if (!overrides) return materials
+  return materials.map((mat) => {
+    if (mat.texture_urls?.base_color) return mat // already has texture
+    if (mat.id.includes('_floor') && overrides.floor) {
+      return { ...mat, texture_urls: { ...mat.texture_urls, base_color: `texture://${overrides.floor}` } }
+    }
+    if (mat.id.includes('_wall') && overrides.wall) {
+      return { ...mat, texture_urls: { ...mat.texture_urls, base_color: `texture://${overrides.wall}` } }
+    }
+    if (mat.id.includes('_ceiling') && overrides.ceiling) {
+      return { ...mat, texture_urls: { ...mat.texture_urls, base_color: `texture://${overrides.ceiling}` } }
+    }
+    return mat
+  })
 }
 
 function buildObjectFromScene(obj: SceneObject): BuiltObject {
@@ -47,11 +68,14 @@ function buildObjectFromScene(obj: SceneObject): BuiltObject {
 
 export function buildScene(scene: HomeSceneJSON): BuiltScene {
   clearMaterialCache()
+  clearTextureCache()
 
-  const materials = scene.materials
-  const walls = buildWalls(scene.walls, materials)
-  const floors = buildFloors(scene.rooms, materials)
-  const ceilings = buildCeilings(scene.rooms, scene.global.ceiling_height, materials)
+  const textureOverrides = scene.global.texture_overrides
+  const materials = applyTextureOverrides(scene.materials, textureOverrides)
+
+  const walls = buildWalls(scene.walls, materials, textureOverrides?.wall)
+  const floors = buildFloors(scene.rooms, materials, textureOverrides?.floor)
+  const ceilings = buildCeilings(scene.rooms, scene.global.ceiling_height, materials, textureOverrides?.ceiling)
   const openings = buildOpenings(scene.openings, scene.walls)
 
   // Use pre-existing objects from scene JSON, or auto-generate
@@ -100,4 +124,5 @@ export function disposeScene(built: BuiltScene): void {
     }
   })
   clearMaterialCache()
+  clearTextureCache()
 }

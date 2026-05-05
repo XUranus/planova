@@ -12,6 +12,7 @@ export function buildCeilings(
   rooms: Room[],
   ceilingHeight: number,
   materials: SceneMaterial[] = [],
+  textureOverride?: string,
 ): BuiltCeiling[] {
   return rooms.map((room) => {
     const geometry = createPolygonGeometry(room.polygon)
@@ -19,9 +20,9 @@ export function buildCeilings(
     let material: THREE.MeshStandardMaterial
     if (room.ceiling_material) {
       const found = getMaterialById(materials, room.ceiling_material)
-      material = found ?? createCeilingMaterial()
+      material = found ?? createCeilingMaterial(textureOverride)
     } else {
-      material = createCeilingMaterial()
+      material = createCeilingMaterial(textureOverride)
     }
 
     const mesh = new THREE.Mesh(geometry, material)

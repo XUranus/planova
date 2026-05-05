@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { SceneMaterial } from '@/types/scene'
+import { getTexture } from './proceduralTextures'
 
 const DEFAULT_WALL_COLOR = '#E8E4DF'
 const DEFAULT_FLOOR_COLOR = '#D9D2C5'
@@ -11,6 +12,22 @@ const materialCache = new Map<string, THREE.Material>()
 
 function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex)
+}
+
+/**
+ * Apply a procedural texture to a material if the texture_url uses the texture:// scheme.
+ * Returns true if a texture was applied.
+ */
+function applyTextureIfPresent(
+  mat: THREE.MeshStandardMaterial,
+  textureUrl?: string,
+): boolean {
+  if (!textureUrl || !textureUrl.startsWith('texture://')) return false
+  const presetId = textureUrl.replace('texture://', '')
+  const tex = getTexture(presetId)
+  if (!tex) return false
+  mat.map = tex
+  return true
 }
 
 export function getMaterial(sceneMat?: SceneMaterial): THREE.MeshStandardMaterial {
@@ -30,6 +47,8 @@ export function getMaterial(sceneMat?: SceneMaterial): THREE.MeshStandardMateria
     mat.opacity = sceneMat.opacity ?? 0.4
   }
 
+  applyTextureIfPresent(mat, sceneMat?.texture_urls?.base_color)
+
   materialCache.set(key, mat)
   return mat
 }
@@ -43,8 +62,8 @@ export function getMaterialById(
   return getMaterial(found)
 }
 
-export function createWallMaterial(): THREE.MeshStandardMaterial {
-  const key = 'wall_default'
+export function createWallMaterial(textureId?: string): THREE.MeshStandardMaterial {
+  const key = textureId ? `wall_default_${textureId}` : 'wall_default'
   const cached = materialCache.get(key)
   if (cached) return cached as THREE.MeshStandardMaterial
 
@@ -54,12 +73,17 @@ export function createWallMaterial(): THREE.MeshStandardMaterial {
     metalness: 0.0,
     side: THREE.DoubleSide,
   })
+
+  if (textureId) {
+    applyTextureIfPresent(mat, `texture://${textureId}`)
+  }
+
   materialCache.set(key, mat)
   return mat
 }
 
-export function createFloorMaterial(color?: string): THREE.MeshStandardMaterial {
-  const key = `floor_${color || DEFAULT_FLOOR_COLOR}`
+export function createFloorMaterial(color?: string, textureId?: string): THREE.MeshStandardMaterial {
+  const key = `floor_${color || DEFAULT_FLOOR_COLOR}_${textureId || ''}`
   const cached = materialCache.get(key)
   if (cached) return cached as THREE.MeshStandardMaterial
 
@@ -69,12 +93,17 @@ export function createFloorMaterial(color?: string): THREE.MeshStandardMaterial 
     metalness: 0.0,
     side: THREE.DoubleSide,
   })
+
+  if (textureId) {
+    applyTextureIfPresent(mat, `texture://${textureId}`)
+  }
+
   materialCache.set(key, mat)
   return mat
 }
 
-export function createCeilingMaterial(): THREE.MeshStandardMaterial {
-  const key = 'ceiling_default'
+export function createCeilingMaterial(textureId?: string): THREE.MeshStandardMaterial {
+  const key = textureId ? `ceiling_default_${textureId}` : 'ceiling_default'
   const cached = materialCache.get(key)
   if (cached) return cached as THREE.MeshStandardMaterial
 
@@ -84,6 +113,11 @@ export function createCeilingMaterial(): THREE.MeshStandardMaterial {
     metalness: 0.0,
     side: THREE.DoubleSide,
   })
+
+  if (textureId) {
+    applyTextureIfPresent(mat, `texture://${textureId}`)
+  }
+
   materialCache.set(key, mat)
   return mat
 }

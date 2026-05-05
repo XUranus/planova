@@ -9,16 +9,16 @@ export interface BuiltFloor {
   area: number
 }
 
-export function buildFloors(rooms: Room[], materials: SceneMaterial[] = []): BuiltFloor[] {
+export function buildFloors(rooms: Room[], materials: SceneMaterial[] = [], textureOverride?: string): BuiltFloor[] {
   return rooms.map((room) => {
     const geometry = createPolygonGeometry(room.polygon)
 
     let material: THREE.MeshStandardMaterial
     if (room.floor_material) {
       const found = getMaterialById(materials, room.floor_material)
-      material = found ?? createFloorMaterial(room.floor_material)
+      material = found ?? createFloorMaterial(room.floor_material, textureOverride)
     } else {
-      material = createFloorMaterial()
+      material = createFloorMaterial(undefined, textureOverride)
     }
 
     const mesh = new THREE.Mesh(geometry, material)

@@ -39,6 +39,11 @@ export interface HomeSceneGlobal {
   style: string
   ceiling_height: number
   wall_thickness: number
+  texture_overrides?: {
+    floor?: string
+    wall?: string
+    ceiling?: string
+  }
 }
 
 export interface Room {
