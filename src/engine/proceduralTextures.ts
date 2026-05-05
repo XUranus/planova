@@ -712,10 +712,130 @@ function generateGridTile(size: number): HTMLCanvasElement {
   return ctx.canvas
 }
 
+// ─── Shader Preset Preview Thumbnails ───────────────────────────────────
+
+function generateWoodGrainPreview(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(2000)
+
+  ctx.fillStyle = '#A07830'
+  ctx.fillRect(0, 0, size, size)
+
+  for (let y = 0; y < size; y += 2) {
+    const wave = Math.sin(y * 0.08 + Math.sin(y * 0.02) * 3) * 0.5 + 0.5
+    const [r, g, b] = hexToRgb('#8B6914')
+    const [r2, g2, b2] = hexToRgb('#C4A265')
+    const t = wave
+    ctx.fillStyle = `rgb(${Math.round(r + (r2 - r) * t)}, ${Math.round(g + (g2 - g) * t)}, ${Math.round(b + (b2 - b) * t)})`
+    ctx.fillRect(0, y, size, 2)
+  }
+
+  const dist = (x: number, y: number) => Math.sqrt((x - size / 2) ** 2 + (y - size / 2) ** 2)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x += 3) {
+      const d = dist(x, y)
+      const ring = Math.sin(d * 0.15 + x * 0.02) * 0.5 + 0.5
+      if (ring < 0.3) {
+        ctx.fillStyle = 'rgba(74, 53, 32, 0.1)'
+        ctx.fillRect(x, y, 3, 1)
+      }
+    }
+  }
+
+  addNoise(ctx, 0.04, 2001)
+  return ctx.canvas
+}
+
+function generateMarbleVeinPreview(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(2100)
+
+  ctx.fillStyle = '#F0EDE8'
+  ctx.fillRect(0, 0, size, size)
+
+  // Veins
+  for (let v = 0; v < 12; v++) {
+    ctx.strokeStyle = `rgba(138, 128, 120, ${0.2 + rand() * 0.3})`
+    ctx.lineWidth = 1 + rand() * 2
+    ctx.beginPath()
+    let x = rand() * size
+    let y = rand() * size
+    ctx.moveTo(x, y)
+    for (let s = 0; s < 40; s++) {
+      x += (rand() - 0.5) * 15
+      y += (rand() - 0.3) * 12
+      ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+  }
+
+  // Sheen
+  for (let i = 0; i < 30; i++) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.03 + rand() * 0.05})`
+    ctx.beginPath()
+    ctx.arc(rand() * size, rand() * size, 2 + rand() * 4, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  addNoise(ctx, 0.025, 2101)
+  return ctx.canvas
+}
+
+function generateConcreteProcPreview(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(2200)
+
+  ctx.fillStyle = '#A09A94'
+  ctx.fillRect(0, 0, size, size)
+
+  addNoise(ctx, 0.1, 2201)
+
+  // Aggregate
+  for (let i = 0; i < 80; i++) {
+    const x = rand() * size
+    const y = rand() * size
+    const r = 1 + rand() * 3
+    ctx.fillStyle = `rgba(112, 104, 96, ${0.15 + rand() * 0.15})`
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  return ctx.canvas
+}
+
+function generateStoneProcPreview(size: number): HTMLCanvasElement {
+  const ctx = createCanvas(size)
+  const rand = seededRandom(2300)
+
+  ctx.fillStyle = '#D0C8C0'
+  ctx.fillRect(0, 0, size, size)
+
+  const blockW = size / 4
+  const blockH = size / 6
+  const mortar = 2
+
+  for (let row = 0; row < 6; row++) {
+    const offset = row % 2 === 0 ? 0 : blockW / 2
+    for (let col = -1; col < 5; col++) {
+      const x = col * blockW + offset
+      const y = row * blockH
+
+      const b = 0.75 + rand() * 0.4
+      const [r, g, b2] = hexToRgb('#8A8278')
+      ctx.fillStyle = `rgb(${Math.round(r * b)}, ${Math.round(g * b)}, ${Math.round(b2 * b)})`
+      ctx.fillRect(x + mortar, y + mortar, blockW - mortar * 2, blockH - mortar * 2)
+    }
+  }
+
+  addNoise(ctx, 0.05, 2301)
+  return ctx.canvas
+}
+
 // ─── Preset Registry ────────────────────────────────────────────────────
 
 export const PRESETS: TexturePreset[] = [
-  // Floor
+  // Floor — canvas
   { id: 'oak_plank', name: 'Oak Plank', category: 'floor', generate: generateOakPlank },
   { id: 'dark_walnut', name: 'Dark Walnut', category: 'floor', generate: generateDarkWalnut },
   { id: 'marble_tile', name: 'Marble Tile', category: 'floor', generate: generateMarbleTile },
@@ -723,13 +843,20 @@ export const PRESETS: TexturePreset[] = [
   { id: 'terracotta', name: 'Terracotta', category: 'floor', generate: generateTerracotta },
   { id: 'porcelain_tile', name: 'Porcelain', category: 'floor', generate: generatePorcelainTile },
   { id: 'concrete', name: 'Concrete', category: 'floor', generate: generateConcrete },
-  // Wall
+  // Floor — shader
+  { id: 'wood_grain', name: 'Wood Grain (Shader)', category: 'floor', generate: generateWoodGrainPreview },
+  { id: 'marble_vein', name: 'Marble Vein (Shader)', category: 'floor', generate: generateMarbleVeinPreview },
+  { id: 'concrete_proc', name: 'Concrete (Shader)', category: 'floor', generate: generateConcreteProcPreview },
+  { id: 'stone_proc', name: 'Stone (Shader)', category: 'floor', generate: generateStoneProcPreview },
+  // Wall — canvas
   { id: 'white_plaster', name: 'White Plaster', category: 'wall', generate: generateWhitePlaster },
   { id: 'subway_tile', name: 'Subway Tile', category: 'wall', generate: generateSubwayTile },
   { id: 'brick', name: 'Brick', category: 'wall', generate: generateBrick },
   { id: 'exposed_concrete', name: 'Exposed Concrete', category: 'wall', generate: generateExposedConcrete },
   { id: 'wood_panel', name: 'Wood Panel', category: 'wall', generate: generateWoodPanel },
   { id: 'stone_wall', name: 'Stone Wall', category: 'wall', generate: generateStoneWall },
+  // Wall — shader
+  { id: 'stone_proc', name: 'Stone (Shader)', category: 'wall', generate: generateStoneProcPreview },
   // Ceiling
   { id: 'smooth_white', name: 'Smooth White', category: 'ceiling', generate: generateSmoothWhite },
   { id: 'flat_white', name: 'Flat White', category: 'ceiling', generate: generateFlatWhite },

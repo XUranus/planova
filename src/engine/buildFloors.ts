@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Room, SceneMaterial } from '@/types/scene'
 import { computePolygonArea } from './geometryUtils'
 import { createFloorMaterial, getMaterialById } from './materials'
+import { createShaderMaterial, isShaderPreset } from './shaderMaterials'
 
 export interface BuiltFloor {
   id: string
@@ -39,7 +40,11 @@ export function buildFloors(rooms: Room[], materials: SceneMaterial[] = [], text
     let material: THREE.MeshStandardMaterial
     if (room.floor_material) {
       const found = getMaterialById(materials, room.floor_material)
-      material = found ?? createFloorMaterial(undefined, textureOverride)
+      material = found ?? (textureOverride && isShaderPreset(textureOverride)
+        ? createShaderMaterial(textureOverride)!
+        : createFloorMaterial(undefined, textureOverride))
+    } else if (textureOverride && isShaderPreset(textureOverride)) {
+      material = createShaderMaterial(textureOverride)!
     } else {
       material = createFloorMaterial(undefined, textureOverride)
     }

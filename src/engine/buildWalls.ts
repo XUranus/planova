@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Wall, SceneMaterial } from '@/types/scene'
 import { createWallGeometry } from './geometryUtils'
 import { createWallMaterial, getMaterialById } from './materials'
+import { createShaderMaterial, isShaderPreset } from './shaderMaterials'
 
 export interface BuiltWall {
   id: string
@@ -15,7 +16,11 @@ export function buildWalls(walls: Wall[], materials: SceneMaterial[] = [], textu
     let material: THREE.MeshStandardMaterial
     if (wall.material) {
       const found = getMaterialById(materials, wall.material)
-      material = found ?? createWallMaterial(textureOverride)
+      material = found ?? (textureOverride && isShaderPreset(textureOverride)
+        ? createShaderMaterial(textureOverride)!
+        : createWallMaterial(textureOverride))
+    } else if (textureOverride && isShaderPreset(textureOverride)) {
+      material = createShaderMaterial(textureOverride)!
     } else {
       material = createWallMaterial(textureOverride)
     }

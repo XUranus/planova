@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Room, SceneMaterial } from '@/types/scene'
 import { createPolygonGeometry } from './geometryUtils'
 import { createCeilingMaterial, getMaterialById } from './materials'
+import { createShaderMaterial, isShaderPreset } from './shaderMaterials'
 
 export interface BuiltCeiling {
   id: string
@@ -20,7 +21,11 @@ export function buildCeilings(
     let material: THREE.MeshStandardMaterial
     if (room.ceiling_material) {
       const found = getMaterialById(materials, room.ceiling_material)
-      material = found ?? createCeilingMaterial(textureOverride)
+      material = found ?? (textureOverride && isShaderPreset(textureOverride)
+        ? createShaderMaterial(textureOverride)!
+        : createCeilingMaterial(textureOverride))
+    } else if (textureOverride && isShaderPreset(textureOverride)) {
+      material = createShaderMaterial(textureOverride)!
     } else {
       material = createCeilingMaterial(textureOverride)
     }
