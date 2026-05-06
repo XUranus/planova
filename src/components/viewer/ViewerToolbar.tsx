@@ -260,7 +260,9 @@ export function ViewerToolbar() {
         onChange={handleFileChange}
       />
 
-      {/* Screenshot */}
+      <Separator orientation="vertical" className="mx-0.5 h-5" />
+
+      {/* Export actions */}
       <Button
         variant="ghost"
         size="sm"
@@ -271,7 +273,6 @@ export function ViewerToolbar() {
         <span className="text-xs">{t('viewer.screenshot')}</span>
       </Button>
 
-      {/* AI Render */}
       {homeScene && (
         <Button
           variant="ghost"
@@ -285,7 +286,6 @@ export function ViewerToolbar() {
         </Button>
       )}
 
-      {/* Export GLB */}
       {builtGroup && (
         <Button
           variant="ghost"
@@ -297,6 +297,8 @@ export function ViewerToolbar() {
           <span className="text-xs">{t('viewer.export_glb')}</span>
         </Button>
       )}
+
+      <Separator orientation="vertical" className="mx-0.5 h-5" />
 
       {/* Reset camera */}
       <Button

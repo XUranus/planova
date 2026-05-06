@@ -129,7 +129,7 @@ export function ProjectDashboard() {
           <Box className="h-4 w-4" />
           {t('demo.section_title')}
         </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           {DEMO_PROJECTS.map((demo) => (
             <Card
               key={demo.id}
@@ -169,7 +169,7 @@ export function ProjectDashboard() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4">
           {projects.map((project) => (
             <Card
               key={project.id}
