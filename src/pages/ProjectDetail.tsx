@@ -134,7 +134,7 @@ export function ProjectDetail() {
         </div>
 
         {/* Right info panel */}
-        <div className="w-[320px] shrink-0 overflow-auto border-l p-4 space-y-4 scrollbar-thin">
+        <div className="w-[380px] shrink-0 overflow-auto border-l p-4 space-y-4 scrollbar-thin">
           {/* Floor plan thumbnail */}
           {files.length > 0 && (
             <Card>
