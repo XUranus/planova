@@ -78,7 +78,10 @@
     "render_export": "AI 渲染",
     "render_exporting": "正在生成渲染图...",
     "render_success": "渲染图已保存",
-    "render_failed": "渲染生成失败"
+    "render_failed": "渲染生成失败",
+    "render_dialog_title": "AI 渲染",
+    "render_prompt_label": "渲染提示词",
+    "render_generate": "生成"
   },
   "styles": {
     "modern_luxury": "现代轻奢",
@@ -117,6 +120,9 @@
     "description_placeholder": "描述你的项目...",
     "style_label": "装修风格",
     "create": "创建项目"
+  },
+  "edit_dialog": {
+    "title": "编辑项目"
   },
   "status_bar": {
     "ready": "就绪",

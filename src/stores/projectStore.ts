@@ -12,6 +12,7 @@ interface ProjectState {
   // API-backed (falls back to local if backend unavailable)
   fetchProjects: () => Promise<void>
   syncCreateProject: (data: { name: string; description: string; style: ProjectStyle }) => Promise<Project>
+  syncUpdateProject: (id: string, data: Partial<Pick<Project, 'name' | 'description' | 'style'>>) => Promise<Project>
   syncDeleteProject: (id: string) => Promise<void>
   syncUploadFile: (projectId: string, file: File) => Promise<UploadedFile>
   syncDeleteFile: (projectId: string, fileId: string) => Promise<void>
@@ -73,6 +74,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const project = createLocalProject(data)
       set((state) => ({ projects: [...state.projects, project] }))
       return project
+    }
+  },
+
+  syncUpdateProject: async (id, data) => {
+    try {
+      const project = await projectsApi.updateProject(id, data)
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? project : p)),
+      }))
+      return project
+    } catch {
+      // Fallback: update locally
+      const now = new Date().toISOString()
+      let updated: Project | undefined
+      set((state) => ({
+        projects: state.projects.map((p) => {
+          if (p.id !== id) return p
+          updated = { ...p, ...data, updatedAt: now }
+          return updated
+        }),
+      }))
+      return updated ?? get().getProject(id)!
     }
   },
 

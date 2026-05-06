@@ -12,6 +12,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { deleteObject } from '@/engine/deleteObject'
@@ -76,6 +84,8 @@ export function ViewerToolbar() {
   const homeScene = useSceneStore((s) => s.homeScene)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [rendering, setRendering] = useState(false)
+  const [renderDialogOpen, setRenderDialogOpen] = useState(false)
+  const [renderPrompt, setRenderPrompt] = useState('')
 
   const handleOpenFile = useCallback(() => {
     fileInputRef.current?.click()
@@ -112,7 +122,22 @@ export function ViewerToolbar() {
     await saveBlob(blob, `planova-screenshot-${Date.now()}.png`)
   }, [])
 
-  const handleRenderExport = useCallback(async () => {
+  const STYLE_PROMPTS: Record<string, string> = {
+    modern_luxury: 'Modern luxury interior with marble, gold accents, sleek furniture, and warm ambient lighting',
+    cream: 'Cream-toned interior with soft neutrals, rounded furniture, plush textures, and warm natural light',
+    nordic: 'Nordic Scandinavian interior with light wood, white walls, minimal furniture, and natural daylight',
+    chinese: 'New Chinese style with dark wood lattice, ink paintings, silk textures, and traditional-modern fusion',
+    wabi_sabi: 'Wabi-sabi interior with raw concrete, imperfect ceramics, natural wood grain, and earthy tones',
+    industrial: 'Industrial style with exposed brick, steel beams, concrete floors, Edison bulbs, and raw materials',
+  }
+
+  const openRenderDialog = useCallback(() => {
+    const style = homeScene?.global?.style || 'modern_luxury'
+    setRenderPrompt(STYLE_PROMPTS[style] || STYLE_PROMPTS.modern_luxury)
+    setRenderDialogOpen(true)
+  }, [homeScene])
+
+  const handleRenderExport = useCallback(async (customPrompt?: string) => {
     const canvases = document.querySelectorAll('canvas')
     let target: HTMLCanvasElement | null = null
     for (const c of canvases) {
@@ -130,9 +155,10 @@ export function ViewerToolbar() {
     const dataUrl = target.toDataURL('image/png')
 
     setRendering(true)
+    setRenderDialogOpen(false)
     toast.info(t('viewer.render_exporting'))
     try {
-      const result = await exportRender(dataUrl, style)
+      const result = await exportRender(dataUrl, style, customPrompt)
       if (result.success && result.render_base64) {
         await saveAndOpenBase64(result.render_base64, `planova-render-${Date.now()}.png`)
       }
@@ -166,6 +192,7 @@ export function ViewerToolbar() {
   }, [selectedObjectId, homeScene])
 
   return (
+    <>
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border bg-background/95 px-1.5 py-1 shadow-lg backdrop-blur-sm">
       {/* Mode selector */}
       <DropdownMenu>
@@ -277,7 +304,7 @@ export function ViewerToolbar() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleRenderExport}
+          onClick={openRenderDialog}
           disabled={rendering}
           className="gap-1.5"
         >
@@ -311,5 +338,33 @@ export function ViewerToolbar() {
         <RotateCcw className="h-4 w-4" />
       </Button>
     </div>
+
+    {/* Render prompt dialog */}
+    <Dialog open={renderDialogOpen} onOpenChange={setRenderDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('viewer.render_dialog_title')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label className="text-sm font-medium">{t('viewer.render_prompt_label')}</label>
+          <Textarea
+            value={renderPrompt}
+            onChange={(e) => setRenderPrompt(e.target.value)}
+            rows={5}
+            className="resize-none"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRenderDialogOpen(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => handleRenderExport(renderPrompt)} disabled={rendering || !renderPrompt.trim()}>
+            {rendering ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {t('viewer.render_generate')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

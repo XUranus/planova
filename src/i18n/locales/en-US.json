@@ -78,7 +78,10 @@
     "render_export": "AI Render",
     "render_exporting": "Generating render...",
     "render_success": "Render saved",
-    "render_failed": "Render generation failed"
+    "render_failed": "Render generation failed",
+    "render_dialog_title": "AI Render",
+    "render_prompt_label": "Rendering Prompt",
+    "render_generate": "Generate"
   },
   "styles": {
     "modern_luxury": "Modern Luxury",
@@ -117,6 +120,9 @@
     "description_placeholder": "Describe your project...",
     "style_label": "Interior Style",
     "create": "Create Project"
+  },
+  "edit_dialog": {
+    "title": "Edit Project"
   },
   "status_bar": {
     "ready": "Ready",

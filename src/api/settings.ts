@@ -80,6 +80,6 @@ export async function testLlmConnection(provider?: string, config?: LlmProvider)
   })
 }
 
-export async function exportRender(screenshotBase64: string, style: string): Promise<{ success: boolean; render_path: string; render_base64: string }> {
-  return invoke('export_render', { screenshotBase64, style })
+export async function exportRender(screenshotBase64: string, style: string, prompt?: string): Promise<{ success: boolean; render_path: string; render_base64: string }> {
+  return invoke('export_render', { screenshotBase64, style, prompt: prompt ?? null })
 }

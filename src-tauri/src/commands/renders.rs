@@ -23,6 +23,7 @@ pub async fn export_render(
     app: AppHandle,
     screenshot_base64: String,
     style: String,
+    prompt: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let data_dir = app
         .path()
@@ -40,12 +41,12 @@ pub async fn export_render(
         return Err("Image generation Model not configured.".to_string());
     }
 
-    let style_desc = style_to_description(&style);
+    let render_prompt = prompt.unwrap_or_else(|| style_to_description(&style));
 
     log::info!(
         "Export render: style={}, model={}",
         style,
-        config.model
+        config.model,
     );
 
     // Strip data URL prefix if present
@@ -54,7 +55,7 @@ pub async fn export_render(
         .map(|(_, b)| b)
         .unwrap_or(&screenshot_base64);
 
-    let result_b64 = crate::ai::client::call_image_gen(b64_data, &style_desc, &config, &data_dir)
+    let result_b64 = crate::ai::client::call_image_gen(b64_data, &render_prompt, &config, &data_dir)
         .await?;
 
     // Save render to disk
