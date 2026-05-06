@@ -1,28 +1,18 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Settings, Globe } from 'lucide-react'
+import { LayoutDashboard, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
 
   const navItems = [
     { icon: LayoutDashboard, label: t('nav.dashboard'), path: '/' },
   ]
-
-  const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng)
-  }
 
   return (
     <aside className="flex h-full w-[240px] flex-col border-r bg-background">
@@ -60,26 +50,7 @@ export function Sidebar() {
       <Separator />
 
       {/* Footer */}
-      <div className="space-y-1 p-2">
-        {/* Language Switcher */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start gap-2">
-              <Globe className="h-4 w-4" />
-              {t('common.language')}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right">
-            <DropdownMenuItem onClick={() => changeLanguage('en-US')}>
-              English
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeLanguage('zh-CN')}>
-              中文
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Settings */}
+      <div className="p-2">
         <Button
           variant={location.pathname === '/settings' ? 'secondary' : 'ghost'}
           className="w-full justify-start gap-2"

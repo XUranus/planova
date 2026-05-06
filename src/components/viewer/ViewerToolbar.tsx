@@ -1,8 +1,8 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   RotateCcw, Camera, FolderOpen, Move3D, Orbit, Pencil,
-  Move, RotateCw, Trash2, Download, Eye, EyeOff,
+  Move, RotateCw, Trash2, Download, Eye, EyeOff, Sparkles, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,35 +14,58 @@ import {
 import { useViewerStore } from '@/stores/viewerStore'
 import { useSceneStore } from '@/stores/sceneStore'
 import { deleteObject } from '@/engine/deleteObject'
+import { invoke } from '@tauri-apps/api/core'
 import { exportToGLB } from '@/engine/exportScene'
 import { toast } from '@/stores/toastStore'
+import { exportRender } from '@/api/settings'
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
+}
+
+async function openFileWithViewer(filePath: string) {
+  const { Command } = await import('@tauri-apps/plugin-shell')
+  const cmd = Command.create('open-file', ['xdg-open', filePath])
+  await cmd.execute()
+}
 
 /**
- * Save a Blob to disk. Uses Tauri native save dialog if available,
- * otherwise falls back to browser <a> download.
+ * Save a Blob to disk using Rust command, then open it with the system viewer.
  */
 async function saveBlob(blob: Blob, defaultName: string) {
-  try {
-    const { save } = await import('@tauri-apps/plugin-dialog')
-    const { writeFile } = await import('@tauri-apps/plugin-fs')
-    const filePath = await save({
-      defaultPath: defaultName,
-      filters: [{ name: defaultName.split('.').pop()?.toUpperCase() || 'File', extensions: [defaultName.split('.').pop() || ''] }],
-    })
-    if (!filePath) return // user cancelled
-    const data = new Uint8Array(await blob.arrayBuffer())
-    await writeFile(filePath, data)
-    toast.success(defaultName)
-  } catch {
-    // Not in Tauri — fallback to browser download
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = defaultName
-    link.click()
-    URL.revokeObjectURL(url)
-    toast.success(defaultName)
-  }
+  const { save } = await import('@tauri-apps/plugin-dialog')
+
+  const filePath = await save({
+    defaultPath: defaultName,
+    filters: [{ name: defaultName.split('.').pop()?.toUpperCase() || 'File', extensions: [defaultName.split('.').pop() || ''] }],
+  })
+  if (!filePath) return
+
+  const b64 = await blobToBase64(blob)
+  await invoke('save_file', { path: filePath, base64Data: b64 })
+  await openFileWithViewer(filePath)
+}
+
+/**
+ * Save a base64 image to a user-chosen path and open it.
+ */
+async function saveAndOpenBase64(b64: string, filename: string) {
+  const { save } = await import('@tauri-apps/plugin-dialog')
+
+  const filePath = await save({
+    defaultPath: filename,
+    filters: [{ name: 'PNG', extensions: ['png'] }],
+  })
+  if (!filePath) return
+
+  await invoke('save_file', { path: filePath, base64Data: b64 })
+  await openFileWithViewer(filePath)
 }
 
 export function ViewerToolbar() {
@@ -51,6 +74,7 @@ export function ViewerToolbar() {
   const builtGroup = useSceneStore((s) => s.builtGroup)
   const homeScene = useSceneStore((s) => s.homeScene)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [rendering, setRendering] = useState(false)
 
   const handleOpenFile = useCallback(() => {
     fileInputRef.current?.click()
@@ -86,6 +110,38 @@ export function ViewerToolbar() {
     const blob = await res.blob()
     await saveBlob(blob, `planova-screenshot-${Date.now()}.png`)
   }, [])
+
+  const handleRenderExport = useCallback(async () => {
+    const canvases = document.querySelectorAll('canvas')
+    let target: HTMLCanvasElement | null = null
+    for (const c of canvases) {
+      if (c.getContext('webgl2') || c.getContext('webgl')) {
+        target = c
+        break
+      }
+    }
+    if (!target) {
+      toast.error('Render: no canvas found')
+      return
+    }
+
+    const style = homeScene?.global?.style || 'modern_luxury'
+    const dataUrl = target.toDataURL('image/png')
+
+    setRendering(true)
+    toast.info(t('viewer.render_exporting'))
+    try {
+      const result = await exportRender(dataUrl, style)
+      if (result.success && result.render_base64) {
+        await saveAndOpenBase64(result.render_base64, `planova-render-${Date.now()}.png`)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`${t('viewer.render_failed')}: ${msg}`)
+    } finally {
+      setRendering(false)
+    }
+  }, [homeScene, t])
 
   const handleExportGLB = useCallback(async () => {
     if (!builtGroup) return
@@ -213,6 +269,20 @@ export function ViewerToolbar() {
         <Camera className="h-4 w-4" />
         <span className="text-xs">{t('viewer.screenshot')}</span>
       </Button>
+
+      {/* AI Render */}
+      {homeScene && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRenderExport}
+          disabled={rendering}
+          className="gap-1.5"
+        >
+          {rendering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          <span className="text-xs">{t('viewer.render_export')}</span>
+        </Button>
+      )}
 
       {/* Export GLB */}
       {builtGroup && (

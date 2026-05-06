@@ -9,8 +9,24 @@
     "core:default",
     "dialog:default",
     "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-ask",
     "fs:default",
     "fs:allow-read-file",
-    "fs:allow-read-text-file"
+    "fs:allow-read-text-file",
+    "fs:allow-write-file",
+    "shell:default",
+    "shell:allow-execute",
+    "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "open-file",
+          "cmd": "xdg-open",
+          "args": true
+        }
+      ]
+    }
   ]
 }

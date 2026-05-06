@@ -47,3 +47,11 @@ Rooms:
 
 Output ONLY a JSON object with an "objects" array. Each object must have: room_id, category, position [x,y], rotation (radians).
 No explanation, no markdown fences, just the JSON."#;
+
+pub const RENDER_IMAGE_SYSTEM: &str = r#"You are an architectural visualization expert. Given a screenshot of a 3D interior model, generate a photorealistic rendering of the same scene from the same viewpoint.
+
+Follow the style description precisely. Maintain the exact room layout, proportions, and spatial relationships. Output only the rendered image."#;
+
+pub const RENDER_IMAGE_USER_TEMPLATE: &str = r#"Style: {style_description}
+
+Generate a photorealistic interior rendering based on this 3D model screenshot. Keep the same viewpoint, room layout, and proportions. Apply the specified interior design style with realistic lighting, materials, and textures."#;

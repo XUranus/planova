@@ -14,6 +14,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -56,6 +57,7 @@ pub fn run() {
             commands::files::list_files,
             commands::files::get_file_preview,
             commands::files::delete_file,
+            commands::files::save_file,
             commands::scenes::get_scene,
             commands::scenes::update_scene,
             commands::tasks::start_generation,
@@ -65,6 +67,7 @@ pub fn run() {
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::test_llm_connection,
+            commands::renders::export_render,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

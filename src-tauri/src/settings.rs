@@ -3,10 +3,21 @@ use std::path::Path;
 use serde_json::Value;
 
 const DEFAULT_SETTINGS: &str = r#"{
-    "llm_provider": {
+    "language": "en-US",
+    "llm_vlm": {
         "base_url": "",
         "api_key": "",
-        "model": "mimo-v2.5"
+        "model": ""
+    },
+    "llm_chat": {
+        "base_url": "",
+        "api_key": "",
+        "model": ""
+    },
+    "llm_image": {
+        "base_url": "",
+        "api_key": "",
+        "model": ""
     }
 }"#;
 
@@ -54,22 +65,28 @@ pub struct LlmConfig {
     pub model: String,
 }
 
-pub fn get_llm_config(data_dir: &Path) -> LlmConfig {
+/// Get LLM config for a specific capability: "vlm", "chat", or "image"
+pub fn get_llm_config_for(data_dir: &Path, capability: &str) -> LlmConfig {
     let settings = get_settings(data_dir);
-    let provider = settings.get("llm_provider").cloned().unwrap_or_default();
-    let get_str = |key: &str, env_var: &str| -> String {
+    let key = format!("llm_{capability}");
+    let provider = settings.get(&key).cloned().unwrap_or_default();
+    let get_str = |field: &str| -> String {
         provider
-            .get(key)
+            .get(field)
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| std::env::var(env_var).unwrap_or_default())
+            .unwrap_or_default()
     };
     LlmConfig {
-        base_url: get_str("base_url", "PLANOVA_OPENAI_BASE_URL"),
-        api_key: get_str("api_key", "PLANOVA_OPENAI_API_KEY"),
-        model: get_str("model", "PLANOVA_OPENAI_MODEL"),
+        base_url: get_str("base_url"),
+        api_key: get_str("api_key"),
+        model: get_str("model"),
     }
+}
+
+pub fn get_llm_config(data_dir: &Path) -> LlmConfig {
+    get_llm_config_for(data_dir, "vlm")
 }
 
 pub fn mask_api_key(key: &str) -> String {

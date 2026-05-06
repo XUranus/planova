@@ -232,3 +232,14 @@ pub fn delete_file(
         .map_err(|e| format!("Failed to delete file: {e}"))?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn save_file(path: String, base64_data: String) -> Result<(), String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&base64_data)
+        .map_err(|e| format!("Failed to decode base64: {e}"))?;
+    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file to {path}: {e}"))?;
+    log::info!("File saved to {path} ({} bytes)", bytes.len());
+    Ok(())
+}

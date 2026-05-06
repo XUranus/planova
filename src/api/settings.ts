@@ -7,7 +7,10 @@ export interface LlmProvider {
 }
 
 export interface SettingsData {
-  llm_provider: LlmProvider
+  language: string
+  llm_vlm: LlmProvider
+  llm_chat: LlmProvider
+  llm_image: LlmProvider
 }
 
 const STORAGE_KEY = 'planova-settings'
@@ -26,11 +29,10 @@ function saveLocal(data: SettingsData) {
 }
 
 const DEFAULTS: SettingsData = {
-  llm_provider: {
-    base_url: '',
-    api_key: '',
-    model: 'mimo-v2.5',
-  },
+  language: localStorage.getItem('planova-lang') || 'en-US',
+  llm_vlm: { base_url: '', api_key: '', model: '' },
+  llm_chat: { base_url: '', api_key: '', model: '' },
+  llm_image: { base_url: '', api_key: '', model: '' },
 }
 
 export async function getSettings(): Promise<SettingsData> {
@@ -44,16 +46,16 @@ export async function getSettings(): Promise<SettingsData> {
 }
 
 export async function updateSettings(data: Partial<SettingsData>): Promise<SettingsData> {
-  // Always save to localStorage first (works offline)
   const current = loadLocal() ?? DEFAULTS
   const merged: SettingsData = {
     ...current,
     ...data,
-    llm_provider: { ...current.llm_provider, ...(data.llm_provider ?? {}) },
+    llm_vlm: { ...current.llm_vlm, ...(data.llm_vlm ?? {}) },
+    llm_chat: { ...current.llm_chat, ...(data.llm_chat ?? {}) },
+    llm_image: { ...current.llm_image, ...(data.llm_image ?? {}) },
   }
   saveLocal(merged)
 
-  // Try to sync to backend
   try {
     const remote = await invoke<SettingsData>('update_settings', { data: merged })
     return remote
@@ -66,12 +68,18 @@ export interface LlmTestResult {
   success: boolean
   api_reachable: boolean
   model_available: boolean
-  multimodal_capable: boolean
   latency_ms: number
   error: string | null
   details: Record<string, unknown>
 }
 
-export async function testLlmConnection(): Promise<LlmTestResult> {
-  return invoke<LlmTestResult>('test_llm_connection')
+export async function testLlmConnection(provider?: string, config?: LlmProvider): Promise<LlmTestResult> {
+  return invoke<LlmTestResult>('test_llm_connection', {
+    provider: provider ?? null,
+    configOverride: config ?? null,
+  })
+}
+
+export async function exportRender(screenshotBase64: string, style: string): Promise<{ success: boolean; render_path: string; render_base64: string }> {
+  return invoke('export_render', { screenshotBase64, style })
 }

@@ -19,7 +19,7 @@ pub async fn run_pipeline(
 
     // Step 2: VLM parse
     log::info!("Step 2/4: Calling VLM to parse floor plan...");
-    let config = crate::settings::get_llm_config(data_dir);
+    let config = crate::settings::get_llm_config_for(data_dir, "vlm");
     if config.api_key.is_empty() {
         return Err("LLM API key not configured".to_string());
     }

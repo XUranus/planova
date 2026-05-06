@@ -54,7 +54,7 @@ pub async fn plan_furniture(
         return Ok(scene);
     }
 
-    let config = settings::get_llm_config(data_dir);
+    let config = settings::get_llm_config_for(data_dir, "chat");
     if config.api_key.is_empty() {
         log::warn!("LLM API key not configured, skipping furniture planning");
         return Ok(scene);

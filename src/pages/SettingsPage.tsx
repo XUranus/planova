@@ -1,52 +1,149 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Eye, EyeOff, Save, Loader2, Zap, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import i18n from '@/i18n'
+import { Eye, EyeOff, Save, Loader2, Zap, CheckCircle2, XCircle, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { getSettings, updateSettings, testLlmConnection, type SettingsData, type LlmTestResult } from '@/api/settings'
+import { getSettings, updateSettings, testLlmConnection, type SettingsData, type LlmProvider, type LlmTestResult } from '@/api/settings'
+import { toast } from '@/stores/toastStore'
 
-const LLM_MODELS = [
-  'mimo-v2.5',
-  'mimo-v2.5-pro',
-  'mimo-v2',
-  'mimo-v2-pro',
-  'mimo-v2-omni',
+const LANGUAGES = [
+  { code: 'en-US', label: 'English' },
+  { code: 'zh-CN', label: '中文' },
 ]
 
-function StatusRow({ label, ok }: { label: string; ok: boolean }) {
+function ProviderCard({
+  title,
+  description,
+  provider,
+  providerKey,
+  showKey,
+  onToggleKey,
+  onChange,
+  onTest,
+  testing,
+  testResult,
+}: {
+  title: string
+  description: string
+  provider: LlmProvider
+  providerKey: string
+  showKey: boolean
+  onToggleKey: () => void
+  onChange: (field: keyof LlmProvider, value: string) => void
+  onTest: () => void
+  testing: boolean
+  testResult: LlmTestResult | null
+}) {
+  const { t } = useTranslation()
+
   return (
-    <div className="flex items-center gap-1">
-      {ok ? (
-        <CheckCircle2 className="h-4 w-4 text-green-500" />
-      ) : (
-        <XCircle className="h-4 w-4 text-destructive" />
-      )}
-      <span className={ok ? 'text-green-700 dark:text-green-400' : 'text-destructive'}>{label}</span>
-    </div>
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription className="text-xs">{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium">{t('settings.base_url')}</label>
+          <Input
+            value={provider.base_url}
+            onChange={(e) => onChange('base_url', e.target.value)}
+            placeholder="https://api.openai.com/v1"
+            className="h-8 text-sm"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium">{t('settings.api_key')}</label>
+          <div className="flex gap-2">
+            <Input
+              type={showKey ? 'text' : 'password'}
+              value={provider.api_key}
+              onChange={(e) => onChange('api_key', e.target.value)}
+              placeholder="sk-..."
+              className="h-8 text-sm"
+            />
+            <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onToggleKey}>
+              {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium">{t('settings.model')}</label>
+          <Input
+            value={provider.model}
+            onChange={(e) => onChange('model', e.target.value)}
+            placeholder="gpt-4o"
+            className="h-8 text-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onTest}
+            disabled={testing || !provider.base_url || !provider.api_key || !provider.model}
+            className="h-7 text-xs"
+          >
+            {testing ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <Zap className="mr-1.5 h-3 w-3" />}
+            {t('settings.test_connection')}
+          </Button>
+
+          {testResult && !testing && (
+            <div className="flex items-center gap-1.5 text-xs">
+              {testResult.success ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  <span className="text-green-700 dark:text-green-400">
+                    {t('settings.test_success')} ({testResult.latency_ms}ms)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-3.5 w-3.5 text-destructive" />
+                  <span className="text-destructive">
+                    {testResult.error || t('settings.test_failed')}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
 export function SettingsPage() {
   const { t } = useTranslation()
-  const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('mimo-v2.5')
-  const [showKey, setShowKey] = useState(false)
+  const [language, setLanguage] = useState(i18n.language || 'en-US')
+  const [llmVlm, setLlmVlm] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
+  const [llmChat, setLlmChat] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
+  const [llmImage, setLlmImage] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [loaded, setLoaded] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<LlmTestResult | null>(null)
+
+  const [testingVlm, setTestingVlm] = useState(false)
+  const [testingChat, setTestingChat] = useState(false)
+  const [testingImage, setTestingImage] = useState(false)
+  const [testResultVlm, setTestResultVlm] = useState<LlmTestResult | null>(null)
+  const [testResultChat, setTestResultChat] = useState<LlmTestResult | null>(null)
+  const [testResultImage, setTestResultImage] = useState<LlmTestResult | null>(null)
 
   const loadSettings = useCallback(async () => {
     try {
       const data = await getSettings()
-      setBaseUrl(data.llm_provider?.base_url || '')
-      setApiKey(data.llm_provider?.api_key || '')
-      setModel(data.llm_provider?.model || 'mimo-v2.5')
+      setLanguage(data.language || i18n.language || 'en-US')
+      setLlmVlm(data.llm_vlm || { base_url: '', api_key: '', model: '' })
+      setLlmChat(data.llm_chat || { base_url: '', api_key: '', model: '' })
+      setLlmImage(data.llm_image || { base_url: '', api_key: '', model: '' })
     } catch {
-      // Backend unavailable — keep defaults
+      // keep defaults
     }
     setLoaded(true)
   }, [])
@@ -55,36 +152,45 @@ export function SettingsPage() {
     loadSettings()
   }, [loadSettings])
 
+  const handleLanguageChange = (code: string) => {
+    setLanguage(code)
+    i18n.changeLanguage(code)
+  }
+
   const handleSave = async () => {
     setSaving(true)
-    setMessage(null)
     try {
-      const data: Partial<SettingsData> = {
-        llm_provider: { base_url: baseUrl, api_key: apiKey, model },
-      }
-      const result = await updateSettings(data)
-      // Update apiKey with masked version from server
-      setApiKey(result.llm_provider.api_key)
-      setMessage({ type: 'success', text: t('settings.save_success') })
+      await updateSettings({
+        language,
+        llm_vlm: llmVlm,
+        llm_chat: llmChat,
+        llm_image: llmImage,
+      })
+      toast.success(t('settings.save_success'))
     } catch {
-      setMessage({ type: 'error', text: t('settings.save_failed') })
+      toast.error(t('settings.save_failed'))
     } finally {
       setSaving(false)
     }
   }
 
-  const handleTest = async () => {
+  const handleTest = async (
+    providerKey: string,
+    config: LlmProvider,
+    setTesting: (v: boolean) => void,
+    setResult: (r: LlmTestResult) => void,
+  ) => {
     setTesting(true)
-    setTestResult(null)
-    setMessage(null)
     try {
-      const result = await testLlmConnection()
-      setTestResult(result)
-      if (!result.success) {
-        setMessage({ type: 'error', text: result.error || t('settings.test_failed') })
+      const result = await testLlmConnection(providerKey.replace('llm_', ''), config)
+      setResult(result)
+      if (result.success) {
+        toast.success(`${t('settings.test_success')} (${result.latency_ms}ms)`)
+      } else {
+        toast.error(result.error || t('settings.test_failed'))
       }
     } catch {
-      setMessage({ type: 'error', text: t('settings.test_failed') })
+      toast.error(t('settings.test_failed'))
     } finally {
       setTesting(false)
     }
@@ -100,101 +206,77 @@ export function SettingsPage() {
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+          {t('settings.save')}
+        </Button>
+      </div>
 
+      {/* Language */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t('settings.llm_provider')}</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            {t('settings.language')}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t('settings.base_url')}</label>
-            <Input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t('settings.api_key')}</label>
-            <div className="flex gap-2">
-              <Input
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowKey(!showKey)}
-              >
-                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t('settings.model')}</label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              {LLM_MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {message && (
-            <div
-              className={`rounded-md px-4 py-2 text-sm ${
-                message.type === 'success'
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                  : 'bg-destructive/10 text-destructive'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
+        <CardContent>
           <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {t('settings.save')}
-            </Button>
-            <Button variant="outline" onClick={handleTest} disabled={testing || !baseUrl || !apiKey}>
-              {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-              {t('settings.test_connection')}
-            </Button>
+            {LANGUAGES.map((lang) => (
+              <Button
+                key={lang.code}
+                variant={language === lang.code ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleLanguageChange(lang.code)}
+              >
+                {lang.label}
+              </Button>
+            ))}
           </div>
-
-          {testResult && (
-            <div className="rounded-md border p-4 space-y-2">
-              <h4 className="text-sm font-medium">{t('settings.test_results')}</h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <StatusRow label={t('settings.test_api')} ok={testResult.api_reachable} />
-                <StatusRow label={t('settings.test_model')} ok={testResult.model_available} />
-                <StatusRow label={t('settings.test_multimodal')} ok={testResult.multimodal_capable} />
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">{t('settings.test_latency')}:</span>
-                  <span className="font-mono">{testResult.latency_ms}ms</span>
-                </div>
-              </div>
-              {testResult.error && (
-                <div className="flex items-center gap-1 text-xs text-destructive">
-                  <AlertTriangle className="h-3 w-3" />
-                  {testResult.error}
-                </div>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Provider cards */}
+      <ProviderCard
+        title={t('settings.provider_vlm')}
+        description={t('settings.provider_vlm_desc')}
+        provider={llmVlm}
+        providerKey="llm_vlm"
+        showKey={showKeys.vlm ?? false}
+        onToggleKey={() => setShowKeys((s) => ({ ...s, vlm: !s.vlm }))}
+        onChange={(field, value) => setLlmVlm((p) => ({ ...p, [field]: value }))}
+        onTest={() => handleTest('llm_vlm', llmVlm, setTestingVlm, setTestResultVlm)}
+        testing={testingVlm}
+        testResult={testResultVlm}
+      />
+
+      <ProviderCard
+        title={t('settings.provider_chat')}
+        description={t('settings.provider_chat_desc')}
+        provider={llmChat}
+        providerKey="llm_chat"
+        showKey={showKeys.chat ?? false}
+        onToggleKey={() => setShowKeys((s) => ({ ...s, chat: !s.chat }))}
+        onChange={(field, value) => setLlmChat((p) => ({ ...p, [field]: value }))}
+        onTest={() => handleTest('llm_chat', llmChat, setTestingChat, setTestResultChat)}
+        testing={testingChat}
+        testResult={testResultChat}
+      />
+
+      <ProviderCard
+        title={t('settings.provider_image')}
+        description={t('settings.provider_image_desc')}
+        provider={llmImage}
+        providerKey="llm_image"
+        showKey={showKeys.image ?? false}
+        onToggleKey={() => setShowKeys((s) => ({ ...s, image: !s.image }))}
+        onChange={(field, value) => setLlmImage((p) => ({ ...p, [field]: value }))}
+        onTest={() => handleTest('llm_image', llmImage, setTestingImage, setTestResultImage)}
+        testing={testingImage}
+        testResult={testResultImage}
+      />
     </div>
   )
 }
