@@ -52,19 +52,19 @@ export function MaterialPanel() {
   if (!materials || materials.length === 0) return null
 
   return (
-    <Card className="absolute right-4 top-4 w-56 shadow-lg backdrop-blur">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs">{t('viewer.material_panel')}</CardTitle>
+    <Card className="absolute right-4 top-4 w-56 border bg-background/95 shadow-lg backdrop-blur-sm">
+      <CardHeader className="px-3 py-2">
+        <CardTitle className="text-xs font-medium">{t('viewer.material_panel')}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent className="space-y-0.5 px-2 pb-2">
         {materials.map((mat) => (
           <button
             key={mat.id}
             onClick={() => handleApplyMaterial(mat)}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
           >
             <span
-              className="inline-block h-4 w-4 shrink-0 rounded border"
+              className="inline-block h-4 w-4 shrink-0 rounded border border-input"
               style={{ backgroundColor: mat.base_color }}
             />
             <span className="truncate">{mat.name}</span>

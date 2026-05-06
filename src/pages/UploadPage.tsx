@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Upload, FileImage, Trash2 } from 'lucide-react'
+import { ArrowLeft, Upload, FileImage, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectStore } from '@/stores/projectStore'
@@ -113,14 +113,21 @@ export function UploadPage() {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         className={cn(
-          'relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors',
+          'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-12 transition-all',
           isDragging
-            ? 'border-primary bg-primary/5'
-            : 'border-muted-foreground/25 hover:border-muted-foreground/50',
-          uploading && 'pointer-events-none opacity-50',
+            ? 'border-primary bg-primary/5 scale-[1.01]'
+            : 'border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/30',
+          uploading && 'pointer-events-none opacity-60',
         )}
       >
-        <Upload className="mb-4 h-10 w-10 text-muted-foreground" />
+        {uploading ? (
+          <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
+        ) : (
+          <Upload className={cn(
+            'mb-4 h-10 w-10 transition-colors',
+            isDragging ? 'text-primary' : 'text-muted-foreground',
+          )} />
+        )}
         <p className="mb-1 text-sm font-medium">
           {uploading ? t('common.loading') : t('upload.dropzone')}
         </p>
@@ -142,7 +149,7 @@ export function UploadPage() {
 
       {/* Error message */}
       {error && (
-        <div className="rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -153,8 +160,8 @@ export function UploadPage() {
           <h3 className="text-sm font-medium">{t('upload.uploaded_files')}</h3>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {files.map((file) => (
-              <Card key={file.id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <Card key={file.id} className="overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-3">
                   <CardTitle className="flex items-center gap-2 text-sm font-medium">
                     <FileImage className="h-4 w-4 text-muted-foreground" />
                     <span className="truncate">{file.fileName}</span>
@@ -162,23 +169,23 @@ export function UploadPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => handleRemove(file.id)}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4 pt-0">
                   <img
                     src={file.previewUrl || ''}
                     alt={file.fileName}
-                    className="mb-2 h-32 w-full rounded-md object-cover"
+                    className="mb-3 h-32 w-full rounded-md object-cover"
                     onError={(e) => {
                       ;(e.target as HTMLImageElement).style.display = 'none'
                     }}
                   />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{file.fileType}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5">{file.fileType}</span>
                     <span>{(file.fileSize / 1024 / 1024).toFixed(1)} MB</span>
                   </div>
                 </CardContent>

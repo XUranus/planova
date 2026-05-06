@@ -55,26 +55,26 @@ export function TexturePanel() {
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{t('viewer.texture_panel')}</CardTitle>
+      <CardHeader className="px-3 py-2">
+        <CardTitle className="text-xs font-medium">{t('viewer.texture_panel')}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2.5 px-3 pb-3">
         {CATEGORIES.map(({ key, i18nKey }) => {
           const categoryPresets = PRESETS.filter((p) => p.category === key)
           const selected = currentOverrides[key]
           return (
             <div key={key} className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-[10px] font-medium text-muted-foreground">
+              <span className="w-10 shrink-0 text-[11px] font-medium text-muted-foreground">
                 {t(i18nKey)}
               </span>
               <div className="flex gap-1 overflow-x-auto scrollbar-none">
                 {/* None option */}
                 <button
                   onClick={() => handleSelect(key, null)}
-                  className={`flex h-8 shrink-0 items-center justify-center rounded border px-2 text-[9px] transition-colors ${
+                  className={`flex h-7 shrink-0 items-center justify-center rounded-md border px-2 text-[11px] font-medium transition-colors ${
                     !selected
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-input hover:bg-accent'
+                      ? 'border-primary/50 bg-primary/10 text-primary'
+                      : 'border-input text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
                   {t('viewer.texture_none')}
@@ -84,10 +84,10 @@ export function TexturePanel() {
                   <button
                     key={preset.id}
                     onClick={() => handleSelect(key, preset.id)}
-                    className={`h-8 w-8 shrink-0 overflow-hidden rounded border transition-colors ${
+                    className={`h-7 w-7 shrink-0 overflow-hidden rounded-md border transition-all ${
                       selected === preset.id
                         ? 'border-primary ring-1 ring-primary'
-                        : 'border-input hover:border-muted-foreground/50'
+                        : 'border-input hover:border-muted-foreground/50 hover:ring-1 hover:ring-muted-foreground/20'
                     }`}
                     title={preset.name}
                   >

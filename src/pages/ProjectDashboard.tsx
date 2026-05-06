@@ -124,7 +124,7 @@ export function ProjectDashboard() {
       </div>
 
       {/* Demo Scenes — always visible, not deletable */}
-      <div className="space-y-3">
+      <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Box className="h-4 w-4" />
           {t('demo.section_title')}
@@ -133,7 +133,7 @@ export function ProjectDashboard() {
           {DEMO_PROJECTS.map((demo) => (
             <Card
               key={demo.id}
-              className="cursor-pointer transition-shadow hover:shadow-md"
+              className="cursor-pointer transition-all hover:border-foreground/10 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => navigate(`/projects/${demo.id}`)}
             >
               <CardHeader>
@@ -155,7 +155,7 @@ export function ProjectDashboard() {
             </Card>
           ))}
         </div>
-      </div>
+      </section>
 
       {/* User Projects */}
       {projects.length === 0 ? (
@@ -173,7 +173,7 @@ export function ProjectDashboard() {
           {projects.map((project) => (
             <Card
               key={project.id}
-              className="cursor-pointer transition-shadow hover:shadow-md"
+              className="cursor-pointer transition-all hover:border-foreground/10 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => navigate(`/projects/${project.id}`)}
             >
               <CardHeader>
@@ -203,12 +203,12 @@ export function ProjectDashboard() {
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span className={`rounded-full px-2 py-0.5 ${
                     project.status === 'completed'
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                      ? 'bg-success/10 text-success'
                       : project.status === 'generating'
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        ? 'bg-primary/10 text-primary'
                         : project.status === 'error'
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                          : 'bg-muted'
+                          ? 'bg-destructive/10 text-destructive'
+                          : 'bg-muted text-muted-foreground'
                   }`}>
                     {t(`status.${project.status}`)}
                   </span>

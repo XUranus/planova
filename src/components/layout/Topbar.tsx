@@ -67,17 +67,17 @@ export function Topbar() {
   const breadcrumbs = getBreadcrumbs(location.pathname, projects, t)
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-4">
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+    <header className="flex h-12 items-center justify-between border-b px-5">
+      <nav className="flex items-center gap-1.5 text-sm">
         {breadcrumbs.map((crumb, i) => (
-          <span key={crumb.path} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight className="h-3 w-3" />}
+          <span key={crumb.path} className="flex items-center gap-1.5">
+            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
             {i === breadcrumbs.length - 1 ? (
               <span className="font-medium text-foreground">{crumb.label}</span>
             ) : (
               <button
                 onClick={() => navigate(crumb.path)}
-                className="cursor-pointer hover:text-foreground transition-colors"
+                className="text-muted-foreground cursor-pointer transition-colors hover:text-foreground"
               >
                 {crumb.label}
               </button>

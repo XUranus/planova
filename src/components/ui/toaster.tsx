@@ -8,18 +8,23 @@ const icons: Record<ToastType, typeof CheckCircle2> = {
   warning: AlertTriangle,
 }
 
-const colors: Record<ToastType, string> = {
-  success: 'border-green-500/30 bg-green-50 text-green-800',
-  error: 'border-red-500/30 bg-red-50 text-red-800',
-  info: 'border-blue-500/30 bg-blue-50 text-blue-800',
-  warning: 'border-yellow-500/30 bg-yellow-50 text-yellow-800',
-}
-
-const iconColors: Record<ToastType, string> = {
-  success: 'text-green-600',
-  error: 'text-red-600',
-  info: 'text-blue-600',
-  warning: 'text-yellow-600',
+const styles: Record<ToastType, { container: string; icon: string }> = {
+  success: {
+    container: 'border-success/20 bg-success/10 text-success',
+    icon: 'text-success',
+  },
+  error: {
+    container: 'border-destructive/20 bg-destructive/10 text-destructive',
+    icon: 'text-destructive',
+  },
+  info: {
+    container: 'border-primary/20 bg-primary/5 text-foreground',
+    icon: 'text-primary',
+  },
+  warning: {
+    container: 'border-muted-foreground/20 bg-muted text-foreground',
+    icon: 'text-muted-foreground',
+  },
 }
 
 export function Toaster() {
@@ -32,17 +37,18 @@ export function Toaster() {
     <div className="pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2">
       {toasts.map((toast) => {
         const Icon = icons[toast.type]
+        const s = styles[toast.type]
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-start gap-3 rounded-lg border p-3 shadow-lg backdrop-blur transition-all duration-200 ${colors[toast.type]}`}
+            className={`pointer-events-auto flex items-start gap-3 rounded-lg border p-3 shadow-lg backdrop-blur transition-all duration-200 ${s.container}`}
             style={{ minWidth: 280, maxWidth: 420 }}
           >
-            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColors[toast.type]}`} />
+            <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${s.icon}`} />
             <p className="flex-1 text-sm leading-relaxed">{toast.message}</p>
             <button
               onClick={() => removeToast(toast.id)}
-              className="shrink-0 opacity-60 hover:opacity-100"
+              className="shrink-0 rounded-md p-0.5 opacity-60 transition-all hover:bg-black/10 hover:opacity-100"
             >
               <X className="h-4 w-4" />
             </button>

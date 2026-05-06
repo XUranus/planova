@@ -5,6 +5,7 @@ import {
   Move, RotateCw, Trash2, Download, Eye, EyeOff, Sparkles, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -165,7 +166,7 @@ export function ViewerToolbar() {
   }, [selectedObjectId, homeScene])
 
   return (
-    <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur">
+    <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border bg-background/95 px-1.5 py-1 shadow-lg backdrop-blur-sm">
       {/* Mode selector */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -203,7 +204,7 @@ export function ViewerToolbar() {
       {/* Edit mode buttons */}
       {mode === 'edit' && (
         <>
-          <div className="mx-1 h-6 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-0.5 h-5" />
           <Button
             variant={transformMode === 'translate' ? 'secondary' : 'ghost'}
             size="sm"
@@ -232,7 +233,7 @@ export function ViewerToolbar() {
         </>
       )}
 
-      <div className="mx-1 h-6 w-px bg-border" />
+      <Separator orientation="vertical" className="mx-0.5 h-5" />
 
       {/* Ceiling toggle */}
       {homeScene && (

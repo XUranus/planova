@@ -134,7 +134,7 @@ export function ProjectDetail() {
         </div>
 
         {/* Right info panel */}
-        <div className="w-[280px] overflow-auto border-l p-4 space-y-4">
+        <div className="w-[280px] overflow-auto border-l p-4 space-y-4 scrollbar-thin">
           {/* Floor plan thumbnail */}
           {files.length > 0 && (
             <Card>
@@ -206,7 +206,7 @@ export function ProjectDetail() {
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
                       )}
                       {activeTask.status === 'completed' && (
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <CheckCircle2 className="h-4 w-4 text-success" />
                       )}
                       {activeTask.status === 'failed' && (
                         <AlertCircle className="h-4 w-4 text-destructive" />

@@ -40,11 +40,11 @@ function ProviderCard({
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+      <CardHeader className="px-5 py-4">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <CardDescription className="text-xs">{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 px-5 pb-5 pt-0">
         <div className="space-y-1.5">
           <label className="text-xs font-medium">{t('settings.base_url')}</label>
           <Input
@@ -97,8 +97,8 @@ function ProviderCard({
             <div className="flex items-center gap-1.5 text-xs">
               {testResult.success ? (
                 <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                  <span className="text-green-700 dark:text-green-400">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                  <span className="text-success">
                     {t('settings.test_success')} ({testResult.latency_ms}ms)
                   </span>
                 </>
@@ -216,13 +216,13 @@ export function SettingsPage() {
 
       {/* Language */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
+        <CardHeader className="px-5 py-4">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <Globe className="h-4 w-4" />
             {t('settings.language')}
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-5 pt-0">
           <div className="flex gap-2">
             {LANGUAGES.map((lang) => (
               <Button
