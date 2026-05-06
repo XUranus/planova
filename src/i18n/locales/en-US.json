@@ -32,7 +32,8 @@
     "no_files": "No files uploaded yet",
     "upload_hint": "Upload a floor plan to get started",
     "floor_plan": "Floor Plan",
-    "click_to_load": "Click to load scene"
+    "click_to_load": "Click to load scene",
+    "scenes": "Scenes"
   },
   "upload": {
     "title": "Upload Floor Plan",
@@ -43,6 +44,9 @@
     "upload_success": "File uploaded successfully",
     "uploaded_files": "Uploaded Files",
     "preview": "Preview",
+    "parsing": "Parsing...",
+    "parse_failed": "Parse failed",
+    "retry": "Retry",
     "remove": "Remove"
   },
   "viewer": {

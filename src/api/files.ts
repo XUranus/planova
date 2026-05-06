@@ -9,6 +9,7 @@ interface FileApi {
   file_type: string
   file_size: number
   preview_url: string
+  parse_status: string
   created_at: string
 }
 
@@ -20,6 +21,7 @@ function fromApi(f: FileApi): UploadedFile {
     fileType: f.file_type,
     fileSize: f.file_size,
     previewUrl: f.preview_url || null,
+    parseStatus: f.parse_status || '',
     createdAt: f.created_at,
   }
 }
@@ -72,4 +74,8 @@ export async function deleteFile(fileId: string): Promise<void> {
 
 export async function getFilePreview(fileId: string): Promise<string> {
   return invoke<string>('get_file_preview', { fileId })
+}
+
+export async function retryParse(fileId: string): Promise<void> {
+  await invoke('retry_parse', { fileId })
 }

@@ -44,6 +44,7 @@ function createLocalFile(projectId: string, file: File): UploadedFile {
     fileType: file.type,
     fileSize: file.size,
     previewUrl: URL.createObjectURL(file),
+    parseStatus: '',
     createdAt: new Date().toISOString(),
   }
 }

@@ -20,6 +20,7 @@ pub struct UploadedFile {
     pub file_size: i64,
     pub storage_path: String,
     pub preview_path: String,
+    pub parse_status: String,
     pub created_at: String,
 }
 
@@ -41,6 +42,8 @@ pub struct GenerationTask {
 pub struct Scene {
     pub id: String,
     pub project_id: String,
+    pub file_id: String,
+    pub name: String,
     pub schema_version: String,
     pub scene_json: Option<serde_json::Value>,
     pub created_at: String,
@@ -66,6 +69,7 @@ pub struct FileResponse {
     pub file_type: String,
     pub file_size: i64,
     pub preview_url: String,
+    pub parse_status: String,
     pub created_at: String,
 }
 
@@ -87,6 +91,8 @@ pub struct TaskResponse {
 pub struct SceneResponse {
     pub id: String,
     pub project_id: String,
+    pub file_id: String,
+    pub name: String,
     pub schema_version: String,
     pub scene_json: Option<serde_json::Value>,
     pub created_at: String,

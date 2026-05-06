@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
     file_size INTEGER DEFAULT 0,
     storage_path TEXT DEFAULT '',
     preview_path TEXT DEFAULT '',
+    parse_status TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
 
@@ -47,6 +48,8 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
 CREATE TABLE IF NOT EXISTS scenes (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    file_id TEXT DEFAULT '',
+    name TEXT DEFAULT '',
     schema_version TEXT DEFAULT '0.1.0',
     scene_json TEXT,
     created_at TEXT NOT NULL,
@@ -60,5 +63,13 @@ pub fn init_db(db_path: &PathBuf) -> Result<Connection, String> {
         .map_err(|e| format!("Failed to set PRAGMAs: {e}"))?;
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("Failed to create schema: {e}"))?;
+
+    // Migration: add new columns to existing tables (ignored if already exist)
+    let _ = conn.execute_batch(
+        "ALTER TABLE uploaded_files ADD COLUMN parse_status TEXT DEFAULT '';
+         ALTER TABLE scenes ADD COLUMN file_id TEXT DEFAULT '';
+         ALTER TABLE scenes ADD COLUMN name TEXT DEFAULT '';"
+    );
+
     Ok(conn)
 }

@@ -3,6 +3,7 @@ use tauri::{AppHandle, State};
 use crate::db::AppState;
 use crate::models::{FileResponse, UploadedFile};
 use crate::storage;
+use super::tasks::spawn_pipeline;
 
 fn now_utc() -> String {
     chrono::Utc::now().to_rfc3339()
@@ -10,6 +11,28 @@ fn now_utc() -> String {
 
 fn make_id() -> String {
     uuid::Uuid::new_v4().simple().to_string()
+}
+
+fn maybe_auto_parse(state: &State<'_, AppState>, project_id: &str, file_id: &str, storage_path: &str) {
+    let data_dir = state.data_dir.clone();
+    let llm_config = crate::settings::get_llm_config(&data_dir);
+    if llm_config.api_key.is_empty() || llm_config.base_url.is_empty() {
+        return;
+    }
+    // Validate it's an image before parsing
+    if image::image_dimensions(storage_path).is_err() {
+        return;
+    }
+    let db_path = data_dir.join("planova.db");
+    let style = {
+        let Ok(db) = state.db.lock() else { return };
+        db.query_row(
+            "SELECT style FROM projects WHERE id = ?1",
+            [project_id],
+            |row| row.get::<_, String>(0),
+        ).unwrap_or_else(|_| "modern_luxury".to_string())
+    };
+    let _ = spawn_pipeline(&db_path, &data_dir, &state.runtime, project_id, file_id, storage_path, &style, 2.8, 0.2);
 }
 
 fn row_to_file(row: &rusqlite::Row) -> rusqlite::Result<UploadedFile> {
@@ -21,6 +44,7 @@ fn row_to_file(row: &rusqlite::Row) -> rusqlite::Result<UploadedFile> {
         file_size: row.get("file_size")?,
         storage_path: row.get("storage_path")?,
         preview_path: row.get("preview_path")?,
+        parse_status: row.get("parse_status").unwrap_or_default(),
         created_at: row.get("created_at")?,
     })
 }
@@ -41,6 +65,7 @@ fn to_file_response(f: &UploadedFile, _data_dir: &Path) -> FileResponse {
         file_type: f.file_type.clone(),
         file_size: f.file_size,
         preview_url,
+        parse_status: f.parse_status.clone(),
         created_at: f.created_at.clone(),
     }
 }
@@ -94,21 +119,25 @@ pub fn upload_file(
 
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.execute(
-        "INSERT INTO uploaded_files (id, project_id, original_filename, file_type, file_size, storage_path, preview_path, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO uploaded_files (id, project_id, original_filename, file_type, file_size, storage_path, preview_path, parse_status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', ?8)",
         rusqlite::params![id, project_id, original_filename, content_type, file_size, storage_path, preview_path, now],
     )
     .map_err(|e| format!("Failed to save file record: {e}"))?;
 
     let file = UploadedFile {
-        id,
-        project_id,
+        id: id.clone(),
+        project_id: project_id.clone(),
         original_filename,
         file_type: content_type.to_string(),
         file_size,
-        storage_path,
+        storage_path: storage_path.clone(),
         preview_path,
+        parse_status: String::new(),
         created_at: now,
     };
+
+    drop(db);
+    maybe_auto_parse(&state, &project_id, &id, &storage_path);
 
     Ok(to_file_response(&file, &data_dir))
 }
@@ -196,21 +225,25 @@ pub fn upload_file_from_base64(
 
     let db = state.db.lock().map_err(|e| e.to_string())?;
     db.execute(
-        "INSERT INTO uploaded_files (id, project_id, original_filename, file_type, file_size, storage_path, preview_path, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO uploaded_files (id, project_id, original_filename, file_type, file_size, storage_path, preview_path, parse_status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, '', ?8)",
         rusqlite::params![id, project_id, filename, content_type, file_size, storage_path, preview_path, now],
     )
     .map_err(|e| format!("Failed to save file record: {e}"))?;
 
     let file = UploadedFile {
-        id,
-        project_id,
+        id: id.clone(),
+        project_id: project_id.clone(),
         original_filename: filename,
         file_type: content_type.to_string(),
         file_size,
-        storage_path,
+        storage_path: storage_path.clone(),
         preview_path,
+        parse_status: String::new(),
         created_at: now,
     };
+
+    drop(db);
+    maybe_auto_parse(&state, &project_id, &id, &storage_path);
 
     Ok(to_file_response(&file, &data_dir))
 }
@@ -227,6 +260,9 @@ pub fn delete_file(
 
     storage::delete_storage_file(&file.storage_path);
     storage::delete_storage_file(&file.preview_path);
+
+    // Delete associated scenes
+    let _ = db.execute("DELETE FROM scenes WHERE file_id = ?1", [&file_id]);
 
     db.execute("DELETE FROM uploaded_files WHERE id = ?1", [&file_id])
         .map_err(|e| format!("Failed to delete file: {e}"))?;

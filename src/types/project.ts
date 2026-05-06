@@ -25,6 +25,7 @@ export interface UploadedFile {
   fileType: string
   fileSize: number
   previewUrl: string | null
+  parseStatus: string
   createdAt: string
 }
 

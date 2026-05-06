@@ -85,6 +85,124 @@ fn update_project_status(db_path: &PathBuf, project_id: &str, status: &str) {
     }
 }
 
+fn update_file_parse_status(db_path: &PathBuf, file_id: &str, status: &str) {
+    if let Ok(conn) = rusqlite::Connection::open(db_path) {
+        let _ = conn.execute(
+            "UPDATE uploaded_files SET parse_status = ?1 WHERE id = ?2",
+            rusqlite::params![status, file_id],
+        );
+    }
+}
+
+/// Spawns a background pipeline task for a given file. Returns the task_id.
+pub fn spawn_pipeline(
+    db_path: &PathBuf,
+    data_dir: &PathBuf,
+    runtime: &tokio::runtime::Runtime,
+    project_id: &str,
+    file_id: &str,
+    file_storage_path: &str,
+    style: &str,
+    ceiling_height: f64,
+    wall_thickness: f64,
+) -> Result<String, String> {
+    let task_id = make_id();
+    let now = now_utc();
+    let input_data = serde_json::json!({
+        "file_id": file_id,
+        "style": style,
+        "ceiling_height": ceiling_height,
+        "wall_thickness": wall_thickness,
+    });
+    let input_str = serde_json::to_string(&input_data).map_err(|e| e.to_string())?;
+
+    // Create task row
+    if let Ok(conn) = rusqlite::Connection::open(db_path) {
+        conn.execute(
+            "INSERT INTO generation_tasks (id, project_id, task_type, status, progress, input_data, error_message, created_at, updated_at) VALUES (?1, ?2, 'floorplan_parse', 'pending', 0, ?3, '', ?4, ?5)",
+            rusqlite::params![task_id, project_id, input_str, now, now],
+        ).map_err(|e| format!("Failed to create task: {e}"))?;
+    }
+
+    // Mark file as parsing
+    update_file_parse_status(db_path, file_id, "parsing");
+
+    let task_id_clone = task_id.clone();
+    let project_id_clone = project_id.to_string();
+    let file_id_clone = file_id.to_string();
+    let file_path = file_storage_path.to_string();
+    let style_owned = style.to_string();
+    let db_path_clone = db_path.clone();
+    let data_dir_clone = data_dir.clone();
+
+    runtime.spawn(async move {
+        log::info!("Pipeline task {task_id_clone} started: project={project_id_clone} file={file_id_clone}");
+
+        update_project_status(&db_path_clone, &project_id_clone, "generating");
+        update_task_status(&db_path_clone, &task_id_clone, 10, "running");
+
+        match crate::pipeline::run_pipeline(
+            &file_path,
+            &style_owned,
+            ceiling_height,
+            wall_thickness,
+            &project_id_clone,
+            &data_dir_clone,
+        ).await {
+            Ok(scene_json) => {
+                log::info!("Pipeline complete: {} rooms", scene_json.get("rooms").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0));
+                update_task_status(&db_path_clone, &task_id_clone, 80, "running");
+
+                // Get filename for scene name
+                let scene_name = if let Ok(conn) = rusqlite::Connection::open(&db_path_clone) {
+                    conn.query_row(
+                        "SELECT original_filename FROM uploaded_files WHERE id = ?1",
+                        [&file_id_clone],
+                        |row| row.get::<_, String>(0),
+                    ).unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
+                // Save scene to DB (one per file)
+                if let Ok(conn) = rusqlite::Connection::open(&db_path_clone) {
+                    let now = now_utc();
+                    let json_str = serde_json::to_string(&scene_json).unwrap_or_default();
+                    let scene_id = make_id();
+
+                    let _ = conn.execute(
+                        "INSERT INTO scenes (id, project_id, file_id, name, schema_version, scene_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, '0.1.0', ?5, ?6, ?7)",
+                        rusqlite::params![scene_id, project_id_clone, file_id_clone, scene_name, json_str, now, now],
+                    );
+                }
+
+                update_task_status(&db_path_clone, &task_id_clone, 95, "running");
+
+                let output = serde_json::json!({
+                    "scene_id": task_id_clone,
+                    "pipeline_urls": {
+                        "preprocessed_image": format!("pipeline/{}/preprocessed.png", project_id_clone),
+                        "vlm_response": format!("pipeline/{}/vlm_response.json", project_id_clone),
+                        "scene_normalized": format!("pipeline/{}/scene_normalized.json", project_id_clone),
+                    }
+                });
+                complete_task(&db_path_clone, &task_id_clone, &output);
+                update_file_parse_status(&db_path_clone, &file_id_clone, "completed");
+                update_project_status(&db_path_clone, &project_id_clone, "completed");
+                log::info!("Pipeline task {task_id_clone} finished successfully");
+            }
+            Err(e) => {
+                log::error!("Pipeline task {task_id_clone} failed: {e}");
+                fail_task(&db_path_clone, &task_id_clone, &e);
+                update_file_parse_status(&db_path_clone, &file_id_clone, "failed");
+                update_project_status(&db_path_clone, &project_id_clone, "error");
+            }
+        }
+    });
+
+    Ok(task_id)
+}
+
 #[tauri::command]
 pub fn start_generation(
     state: State<'_, AppState>,
@@ -97,17 +215,8 @@ pub fn start_generation(
 ) -> Result<TaskResponse, String> {
     let db_path = state.data_dir.join("planova.db");
     let data_dir = state.data_dir.clone();
-    let task_id = make_id();
-    let now = now_utc();
-    let input_data = serde_json::json!({
-        "file_id": file_id,
-        "style": style,
-        "ceiling_height": ceiling_height.unwrap_or(2.8),
-        "wall_thickness": wall_thickness.unwrap_or(0.2),
-    });
-    let input_str = serde_json::to_string(&input_data).map_err(|e| e.to_string())?;
 
-    // Validate LLM config upfront
+    // Validate LLM config
     let llm_config = crate::settings::get_llm_config(&data_dir);
     if llm_config.api_key.is_empty() {
         return Err("LLM API key not configured, please check Settings".to_string());
@@ -119,12 +228,6 @@ pub fn start_generation(
     // Look up file storage path
     let file_storage_path = {
         let db = state.db.lock().map_err(|e| e.to_string())?;
-        db.execute(
-            "INSERT INTO generation_tasks (id, project_id, task_type, status, progress, input_data, error_message, created_at, updated_at) VALUES (?1, ?2, 'floorplan_parse', 'pending', 0, ?3, '', ?4, ?5)",
-            rusqlite::params![task_id, project_id, input_str, now, now],
-        )
-        .map_err(|e| format!("Failed to create task: {e}"))?;
-
         let path: String = db
             .query_row(
                 "SELECT storage_path FROM uploaded_files WHERE id = ?1",
@@ -135,92 +238,105 @@ pub fn start_generation(
         path
     };
 
-    // Validate image file can be opened
+    // Validate image
     if let Err(e) = image::image_dimensions(&file_storage_path) {
         return Err(format!("Uploaded file is not a valid image: {e}"));
     }
 
-    // Spawn background pipeline
-    let task_id_clone = task_id.clone();
-    let project_id_clone = project_id.clone();
-    let ceiling = ceiling_height.unwrap_or(2.8);
-    let thickness = wall_thickness.unwrap_or(0.2);
+    let task_id = spawn_pipeline(
+        &db_path,
+        &data_dir,
+        &state.runtime,
+        &project_id,
+        &file_id,
+        &file_storage_path,
+        &style,
+        ceiling_height.unwrap_or(2.8),
+        wall_thickness.unwrap_or(0.2),
+    )?;
 
-    state.runtime.spawn(async move {
-        log::info!("Generation task {task_id_clone} started: project={project_id_clone} file={file_id}");
-
-        update_project_status(&db_path, &project_id_clone, "generating");
-        update_task_status(&db_path, &task_id_clone, 10, "running");
-
-        match crate::pipeline::run_pipeline(
-            &file_storage_path,
-            &style,
-            ceiling,
-            thickness,
-            &project_id_clone,
-            &data_dir,
-        ).await {
-            Ok(scene_json) => {
-                log::info!("Pipeline complete: {} rooms", scene_json.get("rooms").and_then(|r| r.as_array()).map(|a| a.len()).unwrap_or(0));
-                update_task_status(&db_path, &task_id_clone, 80, "running");
-
-                // Save scene to DB
-                if let Ok(conn) = rusqlite::Connection::open(&db_path) {
-                    let now = now_utc();
-                    let json_str = serde_json::to_string(&scene_json).unwrap_or_default();
-
-                    // Check if scene exists
-                    let exists: bool = conn
-                        .query_row(
-                            "SELECT COUNT(*) FROM scenes WHERE project_id = ?1",
-                            [&project_id_clone],
-                            |row| row.get::<_, i64>(0).map(|c| c > 0),
-                        )
-                        .unwrap_or(false);
-
-                    if exists {
-                        let _ = conn.execute(
-                            "UPDATE scenes SET scene_json = ?1, updated_at = ?2 WHERE project_id = ?3",
-                            rusqlite::params![json_str, now, project_id_clone],
-                        );
-                    } else {
-                        let scene_id = make_id();
-                        let _ = conn.execute(
-                            "INSERT INTO scenes (id, project_id, schema_version, scene_json, created_at, updated_at) VALUES (?1, ?2, '0.1.0', ?3, ?4, ?5)",
-                            rusqlite::params![scene_id, project_id_clone, json_str, now, now],
-                        );
-                    }
-                }
-
-                update_task_status(&db_path, &task_id_clone, 95, "running");
-
-                let output = serde_json::json!({
-                    "scene_id": task_id_clone,
-                    "pipeline_urls": {
-                        "preprocessed_image": format!("pipeline/{}/preprocessed.png", project_id_clone),
-                        "vlm_response": format!("pipeline/{}/vlm_response.json", project_id_clone),
-                        "scene_normalized": format!("pipeline/{}/scene_normalized.json", project_id_clone),
-                    }
-                });
-                complete_task(&db_path, &task_id_clone, &output);
-                update_project_status(&db_path, &project_id_clone, "completed");
-                log::info!("Generation task {task_id_clone} finished successfully");
-            }
-            Err(e) => {
-                log::error!("Generation task {task_id_clone} failed: {e}");
-                fail_task(&db_path, &task_id_clone, &e);
-                update_project_status(&db_path, &project_id_clone, "error");
-            }
-        }
-    });
-
+    let now = now_utc();
     Ok(TaskResponse {
         id: task_id,
         project_id,
         task_type: "floorplan_parse".to_string(),
         status: "pending".to_string(),
         progress: 0,
-        input_data: Some(input_data),
+        input_data: Some(serde_json::json!({
+            "file_id": file_id,
+            "style": style,
+        })),
+        output_data: None,
+        error_message: String::new(),
+        created_at: now.clone(),
+        updated_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn retry_parse(
+    state: State<'_, AppState>,
+    _app: AppHandle,
+    file_id: String,
+) -> Result<TaskResponse, String> {
+    let db_path = state.data_dir.join("planova.db");
+    let data_dir = state.data_dir.clone();
+
+    // Validate LLM config
+    let llm_config = crate::settings::get_llm_config(&data_dir);
+    if llm_config.api_key.is_empty() {
+        return Err("LLM API key not configured, please check Settings".to_string());
+    }
+    if llm_config.base_url.is_empty() {
+        return Err("LLM Base URL not configured, please check Settings".to_string());
+    }
+
+    // Look up file info
+    let (file_storage_path, project_id) = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        let row: (String, String) = db
+            .query_row(
+                "SELECT storage_path, project_id FROM uploaded_files WHERE id = ?1",
+                [&file_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(|_| "File not found".to_string())?;
+        row
+    };
+
+    // Reset parse status
+    update_file_parse_status(&db_path, &file_id, "");
+
+    // Get project style
+    let style = {
+        let db = state.db.lock().map_err(|e| e.to_string())?;
+        db.query_row(
+            "SELECT style FROM projects WHERE id = ?1",
+            [&project_id],
+            |row| row.get::<_, String>(0),
+        ).unwrap_or_else(|_| "modern_luxury".to_string())
+    };
+
+    let task_id = spawn_pipeline(
+        &db_path,
+        &data_dir,
+        &state.runtime,
+        &project_id,
+        &file_id,
+        &file_storage_path,
+        &style,
+        2.8,
+        0.2,
+    )?;
+
+    let now = now_utc();
+    Ok(TaskResponse {
+        id: task_id,
+        project_id,
+        task_type: "floorplan_parse".to_string(),
+        status: "pending".to_string(),
+        progress: 0,
+        input_data: Some(serde_json::json!({ "file_id": file_id })),
         output_data: None,
         error_message: String::new(),
         created_at: now.clone(),
@@ -238,6 +354,24 @@ pub fn get_task(
         .query_row("SELECT * FROM generation_tasks WHERE id = ?1", [&task_id], row_to_task)
         .map_err(|_| "Task not found".to_string())?;
     Ok(to_task_response(&task))
+}
+
+#[tauri::command]
+pub fn get_task_by_file(
+    state: State<'_, AppState>,
+    file_id: String,
+) -> Result<Option<TaskResponse>, String> {
+    let db = state.db.lock().map_err(|e| e.to_string())?;
+    let result = db.query_row(
+        "SELECT * FROM generation_tasks WHERE input_data LIKE ?1 AND status IN ('pending', 'running') ORDER BY created_at DESC LIMIT 1",
+        [format!("%\"file_id\":\"{file_id}\"%")],
+        row_to_task,
+    );
+    match result {
+        Ok(task) => Ok(Some(to_task_response(&task))),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]

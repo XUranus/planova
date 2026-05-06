@@ -32,7 +32,8 @@
     "no_files": "尚未上传文件",
     "upload_hint": "上传户型图以开始",
     "floor_plan": "户型平面图",
-    "click_to_load": "点击加载场景"
+    "click_to_load": "点击加载场景",
+    "scenes": "场景"
   },
   "upload": {
     "title": "上传户型图",
@@ -43,6 +44,9 @@
     "upload_success": "文件上传成功",
     "uploaded_files": "已上传文件",
     "preview": "预览",
+    "parsing": "解析中...",
+    "parse_failed": "解析失败",
+    "retry": "重新识别",
     "remove": "移除"
   },
   "viewer": {

@@ -64,3 +64,12 @@ export async function getTask(taskId: string): Promise<TaskInfo> {
 export async function cancelTask(taskId: string): Promise<void> {
   await invoke('cancel_task', { taskId })
 }
+
+export async function getTaskByFile(fileId: string): Promise<TaskInfo | null> {
+  try {
+    const res = await invoke<TaskApi | null>('get_task_by_file', { fileId })
+    return res ? fromApi(res) : null
+  } catch {
+    return null
+  }
+}
