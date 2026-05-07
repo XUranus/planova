@@ -169,6 +169,14 @@
     "built_in_desc": "Built-in demo scene",
     "clear": "Clear Scene"
   },
+  "editor": {
+    "tab_scenes": "Scenes",
+    "tab_json": "JSON Editor",
+    "format": "Format",
+    "valid": "Valid JSON",
+    "parse_error": "Parse error",
+    "read_only": "Read-only"
+  },
   "furniture": {
     "sofa": "Sofa",
     "coffee_table": "Coffee Table",

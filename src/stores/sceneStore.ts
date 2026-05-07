@@ -17,7 +17,10 @@ interface SceneState {
   builtGroup: THREE.Group | null
   projectId: string | null
 
-  setHomeScene: (scene: HomeSceneJSON | null) => void
+  // JSON editor anti-loop: tracks last editor-originated change
+  lastEditorChange: number
+
+  setHomeScene: (scene: HomeSceneJSON | null, source?: 'editor' | '3d') => void
   setBuiltObjects: (objects: BuiltObject[]) => void
   setBuiltGroup: (group: THREE.Group | null) => void
   loadTestScene: (sceneId: TestSceneId) => void
@@ -34,8 +37,15 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   builtObjects: [],
   builtGroup: null,
   projectId: null,
+  lastEditorChange: 0,
 
-  setHomeScene: (scene) => set({ homeScene: scene }),
+  setHomeScene: (scene, source = '3d') => {
+    const patch: Record<string, unknown> = { homeScene: scene }
+    if (source === 'editor') {
+      patch.lastEditorChange = Date.now()
+    }
+    set(patch)
+  },
   setBuiltObjects: (objects) => set({ builtObjects: objects }),
   setBuiltGroup: (group) => set({ builtGroup: group }),
 

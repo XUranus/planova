@@ -169,6 +169,14 @@
     "built_in_desc": "内置演示场景",
     "clear": "清除场景"
   },
+  "editor": {
+    "tab_scenes": "场景",
+    "tab_json": "JSON 编辑器",
+    "format": "格式化",
+    "valid": "合法 JSON",
+    "parse_error": "解析错误",
+    "read_only": "只读"
+  },
   "furniture": {
     "sofa": "沙发",
     "coffee_table": "茶几",

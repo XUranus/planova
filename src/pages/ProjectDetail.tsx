@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Upload, Image as ImageIcon, Layers, Pencil } from 'lucide-react'
+import { Upload, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -15,13 +14,11 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useProjectStore } from '@/stores/projectStore'
 import { useSceneStore } from '@/stores/sceneStore'
-import { toast } from '@/stores/toastStore'
 import { DEMO_PROJECTS, isDemoProject, demoIdToSceneId } from '@/data/demoProjects'
 import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
-import { TexturePanel } from '@/components/viewer/TexturePanel'
-import { cn } from '@/lib/utils'
+import { RightPanel } from '@/components/viewer/RightPanel'
 import type { ProjectStyle } from '@/types/project'
 import { PROJECT_STYLES } from '@/types/project'
 
@@ -35,7 +32,7 @@ export function ProjectDetail() {
   const fetchProjects = useProjectStore((s) => s.fetchProjects)
   const syncUpdateProject = useProjectStore((s) => s.syncUpdateProject)
   const projects = useProjectStore((s) => s.projects)
-  const { loadTestScene, fetchScenes, homeScene, scenes, activeSceneId, loadScene } = useSceneStore()
+  const { loadTestScene, fetchScenes, scenes } = useSceneStore()
 
   // Edit dialog state
   const [editOpen, setEditOpen] = useState(false)
@@ -99,14 +96,6 @@ export function ProjectDetail() {
       fetchScenes(id)
     }
   }, [files, isDemo, id, fetchScenes])
-
-  // Find the file for the active scene's thumbnail
-  const activeFile = useMemo(() => {
-    if (!activeSceneId) return null
-    const activeScene = scenes.find((s) => s.id === activeSceneId)
-    if (!activeScene?.fileId) return null
-    return files.find((f) => f.id === activeScene.fileId) || null
-  }, [activeSceneId, scenes, files])
 
   // Show loading while fetching project data
   if (!project && !isDemo) {
@@ -178,107 +167,8 @@ export function ProjectDetail() {
           <MaterialPanel />
         </div>
 
-        {/* Right info panel */}
-        <div className="w-[380px] shrink-0 overflow-auto border-l p-4 space-y-4 scrollbar-thin">
-          {/* Scenes list — for user projects with parsed scenes */}
-          {!isDemo && scenes.length > 0 && (
-            <Card>
-              <CardHeader className="px-4 py-3">
-                <CardTitle className="flex items-center gap-1.5 text-xs font-medium">
-                  <Layers className="h-3.5 w-3.5" />
-                  {t('project.scenes')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 px-3 pb-3">
-                {scenes.map((scene) => {
-                  const isActive = scene.id === activeSceneId
-                  const sceneFile = files.find((f) => f.id === scene.fileId)
-                  return (
-                    <button
-                      key={scene.id}
-                      onClick={() => loadScene(scene.id)}
-                      className={cn(
-                        'flex w-full items-center gap-3 rounded-lg border p-2 text-left transition-all',
-                        isActive
-                          ? 'border-primary bg-primary/5'
-                          : 'border-transparent hover:bg-accent',
-                      )}
-                    >
-                      {sceneFile?.previewUrl ? (
-                        <img
-                          src={sceneFile.previewUrl}
-                          alt={scene.name}
-                          className="h-10 w-12 shrink-0 rounded object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-12 shrink-0 items-center justify-center rounded bg-muted">
-                          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium">{scene.name || scene.id.slice(0, 8)}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {new Date(scene.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </button>
-                  )
-                })}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Floor plan thumbnail for active scene */}
-          {activeFile && (
-            <Card>
-              <CardHeader className="px-4 py-3">
-                <CardTitle className="flex items-center gap-1.5 text-xs font-medium">
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  {t('project.floor_plan')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
-                <div className="aspect-[4/3] w-full overflow-hidden rounded border bg-muted">
-                  <img
-                    src={activeFile.previewUrl || ''}
-                    alt={t('project.floor_plan')}
-                    className="h-full w-full object-contain"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Project info */}
-          <Card>
-            <CardHeader className="px-4 py-3">
-              <CardTitle className="text-xs font-medium">{t('project.status')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 px-4 pb-4 pt-0 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">{t('project.style')}</span>
-                <span>{t(`styles.${project.style}`)}</span>
-              </div>
-              {isDemo ? (
-                <p className="text-xs text-muted-foreground">{t('demo.built_in_desc')}</p>
-              ) : (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('upload.uploaded_files')}</span>
-                    <span>{files.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">{t('project.scenes')}</span>
-                    <span>{scenes.length}</span>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Texture selector — always visible when scene is loaded */}
-          {homeScene && <TexturePanel />}
-        </div>
+        {/* Right panel with tabs */}
+        <RightPanel isDemo={isDemo} projectId={id} projectStyle={project.style} />
       </div>
 
       {/* Edit project dialog */}
