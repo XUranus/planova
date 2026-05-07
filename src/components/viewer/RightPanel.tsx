@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { Image as ImageIcon, Layers, Code } from 'lucide-react'
+import { Image as ImageIcon, Layers, SlidersHorizontal } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TexturePanel } from '@/components/viewer/TexturePanel'
-import { SceneJsonEditor } from '@/components/viewer/SceneJsonEditor'
+import { SceneInspector } from '@/components/viewer/SceneInspector'
 import { useSceneStore } from '@/stores/sceneStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { cn } from '@/lib/utils'
@@ -30,16 +30,16 @@ export function RightPanel({ isDemo, projectId, projectStyle, width = 380 }: Rig
 
   return (
     <div className="shrink-0 overflow-hidden border-l" style={{ width }}>
-      <Tabs defaultValue="scenes" className="flex h-full flex-col">
+      <Tabs defaultValue="inspector" className="flex h-full flex-col">
         <div className="border-b px-3 py-2">
           <TabsList className="h-8 w-full">
             <TabsTrigger value="scenes" className="gap-1.5 px-3 text-xs flex-1">
               <Layers className="h-3.5 w-3.5" />
               {t('editor.tab_scenes')}
             </TabsTrigger>
-            <TabsTrigger value="json-editor" className="gap-1.5 px-3 text-xs flex-1">
-              <Code className="h-3.5 w-3.5" />
-              {t('editor.tab_json')}
+            <TabsTrigger value="inspector" className="gap-1.5 px-3 text-xs flex-1">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {t('inspector.tab')}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -145,8 +145,8 @@ export function RightPanel({ isDemo, projectId, projectStyle, width = 380 }: Rig
           {homeScene && <TexturePanel />}
         </TabsContent>
 
-        <TabsContent value="json-editor" className="flex-1 min-h-0 mt-0 p-3">
-          <SceneJsonEditor />
+        <TabsContent value="inspector" className="flex-1 min-h-0 mt-0">
+          <SceneInspector />
         </TabsContent>
       </Tabs>
     </div>
