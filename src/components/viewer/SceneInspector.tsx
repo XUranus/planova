@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSceneStore } from '@/stores/sceneStore'
+import type { HomeSceneJSON } from '@/types/scene'
 import { SectionWrapper } from './inspector/FieldInputs'
 import {
   ObjectCard,
@@ -33,6 +34,14 @@ export function SceneInspector() {
     )
   }
 
+  const setHomeScene = useSceneStore((s) => s.setHomeScene)
+
+  const handleSectionChange = useCallback((key: string, newData: unknown) => {
+    if (!homeScene) return
+    const updated = { ...homeScene, [key]: newData } as HomeSceneJSON
+    setHomeScene(updated, 'editor')
+  }, [homeScene, setHomeScene])
+
   const sections = [
     { key: 'objects', title: t('inspector.objects'), count: homeScene.objects.length, data: homeScene.objects, defaultOpen: true },
     { key: 'rooms', title: t('inspector.rooms'), count: homeScene.rooms.length, data: homeScene.rooms, defaultOpen: true },
@@ -57,6 +66,8 @@ export function SceneInspector() {
           showJson={showJson[section.key] ?? false}
           onToggleJson={() => toggleJson(section.key)}
           jsonData={section.data}
+          onJsonChange={isReadOnly ? undefined : (data) => handleSectionChange(section.key, data)}
+          readOnly={isReadOnly}
         >
           {section.key === 'objects' && homeScene.objects.map((item) => (
             <ObjectCard key={item.id} item={item} />

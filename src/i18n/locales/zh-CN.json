@@ -198,6 +198,7 @@
     "no_scene": "未加载场景",
     "view_json": "JSON",
     "hide_json": "JSON",
+    "edit_json": "编辑",
     "readonly": "只读"
   },
   "furniture": {

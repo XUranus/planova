@@ -198,6 +198,7 @@
     "no_scene": "No scene loaded",
     "view_json": "JSON",
     "hide_json": "JSON",
+    "edit_json": "Edit",
     "readonly": "Read-only"
   },
   "furniture": {

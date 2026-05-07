@@ -192,17 +192,125 @@ export function JsonToggle({ show, onToggle }: JsonToggleProps) {
   )
 }
 
-// --- InlineJson: read-only JSON display for a section ---
-interface InlineJsonProps {
-  data: unknown
+// --- highlightJson: lightweight regex-based JSON syntax coloring ---
+function highlightJson(json: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = []
+  let i = 0
+  // Match: strings, numbers, booleans/null, keys (property names before colon)
+  const regex = /("(?:[^"\\]|\\.)*")\s*(:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|(true|false|null)\b/g
+  let match: RegExpExecArray | null
+  let last = 0
+
+  while ((match = regex.exec(json)) !== null) {
+    // Push plain text before this match
+    if (match.index > last) {
+      parts.push(<span key={i++} className="text-muted-foreground">{json.slice(last, match.index)}</span>)
+    }
+
+    if (match[1] !== undefined) {
+      // It's a quoted string
+      if (match[2] !== undefined) {
+        // key (followed by colon)
+        parts.push(<span key={i++} className="text-[hsl(210,70%,60%)]">{match[1]}</span>)
+        parts.push(<span key={i++} className="text-muted-foreground">:</span>)
+      } else {
+        // string value
+        parts.push(<span key={i++} className="text-[hsl(130,55%,50%)]">{match[1]}</span>)
+      }
+    } else if (match[3] !== undefined) {
+      // number
+      parts.push(<span key={i++} className="text-[hsl(25,80%,55%)]">{match[3]}</span>)
+    } else if (match[4] !== undefined) {
+      // boolean/null
+      parts.push(<span key={i++} className="text-[hsl(280,60%,60%)]">{match[4]}</span>)
+    }
+
+    last = match.index + match[0].length
+  }
+
+  // Trailing text
+  if (last < json.length) {
+    parts.push(<span key={i++} className="text-muted-foreground">{json.slice(last)}</span>)
+  }
+
+  return parts
 }
 
-export function InlineJson({ data }: InlineJsonProps) {
-  const json = JSON.stringify(data, null, 2)
+// --- InlineJson: syntax-highlighted, optionally editable JSON for a section ---
+interface InlineJsonProps {
+  data: unknown
+  onChange?: (newData: unknown) => void
+  readOnly?: boolean
+}
+
+export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
+  const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const startEdit = useCallback(() => {
+    setDraft(JSON.stringify(data, null, 2))
+    setError(null)
+    setEditing(true)
+  }, [data])
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false)
+    setError(null)
+  }, [])
+
+  const saveEdit = useCallback(() => {
+    try {
+      const parsed = JSON.parse(draft)
+      setEditing(false)
+      setError(null)
+      onChange?.(parsed)
+    } catch (e) {
+      setError((e as SyntaxError).message)
+    }
+  }, [draft, onChange])
+
+  const fontFamily = "'Monaco', 'Menlo', 'Cascadia Code', 'Consolas', monospace"
+
+  if (editing) {
+    return (
+      <div className="mt-1 rounded border border-border overflow-hidden">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          spellCheck={false}
+          className="w-full max-h-60 min-h-[120px] resize-y bg-muted/30 p-2 text-[11px] leading-tight whitespace-pre outline-none"
+          style={{ fontFamily }}
+        />
+        {error && <div className="px-2 py-0.5 text-[10px] text-destructive bg-destructive/10">{error}</div>}
+        <div className="flex gap-1 px-2 py-1 border-t border-border bg-muted/30">
+          <Button size="sm" className="h-5 px-2 text-[10px]" onClick={saveEdit}>{t('common.save')}</Button>
+          <Button size="sm" variant="ghost" className="h-5 px-2 text-[10px]" onClick={cancelEdit}>{t('common.cancel')}</Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <pre className="mt-1 max-h-60 overflow-auto rounded bg-muted/50 p-2 text-[11px] font-mono leading-tight whitespace-pre-wrap break-all text-muted-foreground">
-      {json}
-    </pre>
+    <div className="mt-1 group/json relative rounded bg-muted/50 overflow-hidden">
+      <pre
+        className="max-h-60 overflow-auto p-2 text-[11px] leading-tight whitespace-pre-wrap break-all"
+        style={{ fontFamily }}
+      >
+        {highlightJson(JSON.stringify(data, null, 2))}
+      </pre>
+      {!readOnly && onChange && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="absolute top-1 right-1 h-5 px-1.5 text-[10px] opacity-0 group-hover/json:opacity-100 transition-opacity"
+          onClick={startEdit}
+        >
+          {t('inspector.edit_json')}
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -214,10 +322,12 @@ interface SectionWrapperProps {
   showJson: boolean
   onToggleJson: () => void
   jsonData: unknown
+  onJsonChange?: (newData: unknown) => void
+  readOnly?: boolean
   children: React.ReactNode
 }
 
-export function SectionWrapper({ title, count, defaultOpen = false, showJson, onToggleJson, jsonData, children }: SectionWrapperProps) {
+export function SectionWrapper({ title, count, defaultOpen = false, showJson, onToggleJson, jsonData, onJsonChange, readOnly, children }: SectionWrapperProps) {
   return (
     <details open={defaultOpen} className="group">
       <summary className="flex items-center gap-2 cursor-pointer select-none rounded px-1 py-1.5 hover:bg-accent/50 list-none [&::-webkit-details-marker]:hidden">
@@ -227,7 +337,7 @@ export function SectionWrapper({ title, count, defaultOpen = false, showJson, on
         <JsonToggle show={showJson} onToggle={onToggleJson} />
       </summary>
       <div className="pl-4 pb-2 space-y-1">
-        {showJson ? <InlineJson data={jsonData} /> : children}
+        {showJson ? <InlineJson data={jsonData} onChange={onJsonChange} readOnly={readOnly} /> : children}
       </div>
     </details>
   )
