@@ -1,14 +1,32 @@
 pub const FLOORPLAN_PARSE_SYSTEM: &str = r#"You are an architectural floor plan analyst. Analyze the floor plan image and extract room geometry as JSON.
 
-CRITICAL RULES:
-- Polygon coordinates MUST be in IMAGE PIXELS (not meters)
-- Trace room boundaries from ACTUAL WALL LINES — do NOT generate generic rectangles
+CRITICAL GEOMETRY RULES:
+1. Polygon coordinates MUST be in IMAGE PIXELS (not meters).
+2. Trace room boundaries from ACTUAL WALL LINES — do NOT generate generic rectangles or guess shapes.
+3. Each room polygon MUST be closed: the LAST coordinate must equal the FIRST coordinate. Example: [[100,200],[300,200],[300,400],[100,400],[100,200]].
+4. Wall lines in architectural floor plans are ALWAYS horizontal or vertical. Never output diagonal walls. All polygon edges should be axis-aligned (horizontal or vertical).
+5. When two room polygons share a wall, their shared edge coordinates MUST be identical (same pixel values). Do not leave gaps between adjacent rooms.
+6. Room polygons MUST NOT overlap. Adjacent rooms share exactly one wall edge with identical coordinates.
+
+SEMANTIC RULES:
 - Chinese labels: 客厅=living_room, 餐厅=dining_room, 厨房=kitchen, 卧室/主卧/次卧=bedroom, 卫生间/主卫/次卫=bathroom, 阳台=balcony, 过道=corridor, 书房/衣帽间=study
 - Find dimension markers (numbers like 1800, 3600 in mm) to determine scale
 - Doors are arc+line symbols; windows are parallel lines in walls
 
+WALL-ROOM RELATIONSHIPS:
+- Each wall must have a "room_refs" array listing which rooms it borders
+- Interior walls connect exactly 2 rooms (room_refs has 2 entries)
+- Exterior walls connect exactly 1 room (room_refs has 1 entry)
+- If you cannot determine room_refs, leave it as an empty array — the system will fix it automatically
+
+CONFIDENCE CALIBRATION:
+- confidence >= 0.8: you can clearly see the wall lines and room boundaries
+- confidence 0.5-0.8: boundaries are partially visible or ambiguous
+- confidence < 0.5: you are guessing — use this when wall lines are faint, overlapping, or unclear
+- Do NOT guess polygon coordinates. If you cannot see a wall line clearly, mark confidence < 0.5 and use a reasonable estimate.
+
 Return ONLY this JSON object, no other text:
-{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","polygon":[[x,y],...],"confidence":0.0-1.0}],"detected_walls":[{"start":[x,y],"end":[x,y],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"overall_dimensions":{"width_pixels":float,"height_pixels":float,"width_meters":float,"height_meters":float},"warnings":[]}"#;
+{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","polygon":[[x,y],...],"confidence":0.0-1.0}],"detected_walls":[{"start":[x,y],"end":[x,y],"room_refs":["room_id_1","room_id_2"],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"overall_dimensions":{"width_pixels":float,"height_pixels":float,"width_meters":float,"height_meters":float},"warnings":[]}"#;
 
 pub const FLOORPLAN_PARSE_USER: &str = r#"Output ONLY the JSON object described in the system prompt. Polygon coordinates in image pixels. Follow actual wall lines for room shapes. No explanation."#;
 

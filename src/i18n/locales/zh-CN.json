@@ -199,7 +199,13 @@
     "view_json": "JSON",
     "hide_json": "JSON",
     "edit_json": "编辑",
-    "readonly": "只读"
+    "readonly": "只读",
+    "parse_quality": "解析质量",
+    "parse_score": "分数",
+    "needs_review": "需要检查",
+    "geometry": "几何",
+    "semantic": "语义",
+    "scale": "尺度"
   },
   "furniture": {
     "sofa": "沙发",

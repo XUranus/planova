@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
+const EMPTY_FILES: never[] = []
 
 export function UploadPage() {
   const { t } = useTranslation()
@@ -26,7 +27,7 @@ export function UploadPage() {
   }, [id, fetchFiles])
 
   // Poll for parse status updates while any file is parsing
-  const files = useProjectStore((s) => (id ? s.files[id] || [] : []))
+  const files = useProjectStore((s) => (id ? s.files[id] : undefined) ?? EMPTY_FILES)
   const hasParsing = files.some((f) => f.parseStatus === 'parsing' || f.parseStatus === '')
 
   useEffect(() => {

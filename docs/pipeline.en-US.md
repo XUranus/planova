@@ -2,10 +2,10 @@
 
 ## Overview
 
-Planova converts a floor plan image (JPG/PNG) into a walkable 3D interior model. The pipeline has 4 stages:
+Planova converts a floor plan image (JPG/PNG) into a walkable 3D interior model. The pipeline has 7 stages:
 
 ```
-Raw Image → [Preprocess] → [VLM Parse] → [Normalize] → [3D Render]
+Raw Image → [Preprocess] → [VLM Parse] → [Normalize] → [Repair] → [Validate] → [Overlay] → [Furniture] → [3D Render]
 ```
 
 All intermediate artifacts are saved to `data/pipeline/{project_id}/` for debugging.
@@ -14,8 +14,8 @@ All intermediate artifacts are saved to `data/pipeline/{project_id}/` for debugg
 
 ## Stage 1: Image Preprocessing
 
-**Module**: `backend/app/pipeline/preprocess.py`
-**Function**: `preprocess_floor_plan(input_path: str) -> str`
+**Module**: `src-tauri/src/pipeline/preprocess.rs`
+**Function**: `preprocess_floor_plan(input_path: &str) -> Result<String, String>`
 
 ### Steps
 
@@ -45,8 +45,8 @@ Also copied to `data/pipeline/{project_id}/preprocessed.jpg`.
 
 ## Stage 2: VLM Multimodal Parsing
 
-**Module**: `backend/app/ai/openai_client.py`
-**Function**: `parse_floor_plan_with_vlm(image_path: str) -> dict`
+**Module**: `src-tauri/src/ai/client.rs`
+**Function**: `call_vlm(image_path: &str, config: &LLMConfig, data_dir: &Path) -> Result<Value, String>`
 
 ### Steps
 
@@ -58,11 +58,28 @@ Also copied to `data/pipeline/{project_id}/preprocessed.jpg`.
 ### System Prompt Key Instructions
 
 ```
+Geometry Rules:
 - Polygon coordinates MUST be in IMAGE PIXELS (not meters)
 - Trace room boundaries from ACTUAL WALL LINES — do NOT generate generic rectangles
+- Each room polygon MUST be closed (last coordinate equals first coordinate)
+- Wall lines MUST be horizontal or vertical — never diagonal
+- When two rooms share a wall, shared edge coordinates MUST be identical
+- Room polygons MUST NOT overlap
+
+Semantic Rules:
 - Chinese labels: 客厅=living_room, 卧室=bedroom, 厨房=kitchen, 卫生间=bathroom...
 - Find dimension markers (numbers like 1800, 3600 in mm) to determine scale
 - Doors are arc+line symbols; windows are parallel lines in walls
+
+Wall-Room Relationships:
+- Each wall must have a "room_refs" array listing which rooms it borders
+- Interior walls connect exactly 2 rooms
+- Exterior walls connect exactly 1 room
+
+Confidence Calibration:
+- >= 0.8: wall lines and room boundaries clearly visible
+- 0.5-0.8: boundaries partially visible or ambiguous
+- < 0.5: guessing — mark low confidence when uncertain
 ```
 
 ### Input
@@ -77,36 +94,12 @@ Preprocessed floor plan image + text instructions.
     {
       "type": "living_room",
       "name": "客厅",
-      "polygon": [[120, 200], [580, 200], [580, 520], [120, 520]],
+      "polygon": [[120, 200], [580, 200], [580, 520], [120, 520], [120, 200]],
       "confidence": 0.92
-    },
-    {
-      "type": "bedroom",
-      "name": "主卧",
-      "polygon": [[580, 200], [900, 200], [900, 520], [580, 520]],
-      "confidence": 0.88
-    },
-    {
-      "type": "kitchen",
-      "name": "厨房",
-      "polygon": [[120, 0], [350, 0], [350, 200], [120, 200]],
-      "confidence": 0.85
-    },
-    {
-      "type": "bathroom",
-      "name": "卫生间",
-      "polygon": [[350, 0], [580, 0], [580, 200], [350, 200]],
-      "confidence": 0.90
     }
   ],
   "detected_walls": [
-    {"start": [120, 0], "end": [900, 0], "confidence": 0.95},
-    {"start": [900, 0], "end": [900, 520], "confidence": 0.95},
-    {"start": [120, 520], "end": [900, 520], "confidence": 0.95},
-    {"start": [120, 0], "end": [120, 520], "confidence": 0.95},
-    {"start": [120, 200], "end": [900, 200], "confidence": 0.90},
-    {"start": [580, 200], "end": [580, 520], "confidence": 0.88},
-    {"start": [350, 0], "end": [350, 200], "confidence": 0.85}
+    {"start": [120, 0], "end": [900, 0], "room_refs": ["room_1"], "confidence": 0.95}
   ],
   "detected_doors": [
     {
@@ -115,13 +108,6 @@ Preprocessed floor plan image + text instructions.
       "connected_rooms": ["kitchen", "living_room"],
       "swing_direction": "left_inward",
       "confidence": 0.80
-    },
-    {
-      "position": [700, 200],
-      "width_meters": 0.9,
-      "connected_rooms": ["bedroom", "living_room"],
-      "swing_direction": "right_inward",
-      "confidence": 0.75
     }
   ],
   "detected_windows": [
@@ -130,12 +116,6 @@ Preprocessed floor plan image + text instructions.
       "width_meters": 1.2,
       "wall_side": "west",
       "confidence": 0.85
-    },
-    {
-      "position": [500, 520],
-      "width_meters": 1.8,
-      "wall_side": "south",
-      "confidence": 0.82
     }
   ],
   "scale_info": {
@@ -152,7 +132,7 @@ Preprocessed floor plan image + text instructions.
 }
 ```
 
-**Note**: All coordinates are in **pixels**. `scale_info` provides the pixel-to-meter conversion ratio. In this example, `meters_per_pixel = 0.00833` (i.e., ~120 pixels = 1 meter).
+**Note**: All coordinates are in **pixels**. `scale_info` provides the pixel-to-meter conversion ratio.
 
 Saved to `data/pipeline/{project_id}/vlm_response.json`.
 
@@ -160,8 +140,8 @@ Saved to `data/pipeline/{project_id}/vlm_response.json`.
 
 ## Stage 3: Data Normalization
 
-**Module**: `backend/app/pipeline/normalizer.py`
-**Function**: `normalize_scene(raw, style, ceiling_height, wall_thickness, project_name, project_id) -> dict`
+**Module**: `src-tauri/src/pipeline/normalizer.rs`
+**Function**: `normalize_scene(raw, style, ceiling_height, wall_thickness, project_name, project_id) -> Value`
 
 ### Steps
 
@@ -172,213 +152,230 @@ Saved to `data/pipeline/{project_id}/vlm_response.json`.
 5. **Camera presets** — Generate overview camera + per-room interior cameras
 6. **Light generation** — One light per room (area lights for living room/bedroom, point lights for others)
 
-### Input
-
-Raw VLM JSON + project parameters:
-
-```python
-raw = {VLM output above}
-style = "modern_luxury"
-ceiling_height = 2.8
-wall_thickness = 0.2
-project_name = "My Home"
-project_id = "proj_abc123"
-```
-
 ### Output (HomeSceneJSON)
 
-```json
-{
-  "schema_version": "0.1.0",
-  "project": {
-    "id": "proj_abc123",
-    "name": "My Home",
-    "unit": "meter"
-  },
-  "global": {
-    "style": "modern_luxury",
-    "ceiling_height": 2.8,
-    "wall_thickness": 0.2
-  },
-  "rooms": [
-    {
-      "id": "room_1",
-      "type": "living_room",
-      "name": "客厅",
-      "polygon": [[1.0, 1.666], [4.833, 1.666], [4.833, 4.333], [1.0, 4.333]],
-      "area": 18.13,
-      "floor_material": "mat_modern_luxury_floor_living_room",
-      "wall_material": "mat_modern_luxury_wall",
-      "ceiling_material": "mat_modern_luxury_ceiling"
-    },
-    {
-      "id": "room_2",
-      "type": "bedroom",
-      "name": "主卧",
-      "polygon": [[4.833, 1.666], [7.5, 1.666], [7.5, 4.333], [4.833, 4.333]],
-      "area": 12.50,
-      "floor_material": "mat_modern_luxury_floor_bedroom",
-      "wall_material": "mat_modern_luxury_wall",
-      "ceiling_material": "mat_modern_luxury_ceiling"
-    },
-    {
-      "id": "room_3",
-      "type": "kitchen",
-      "name": "厨房",
-      "polygon": [[1.0, 0], [2.917, 0], [2.917, 1.666], [1.0, 1.666]],
-      "area": 5.14,
-      "floor_material": "mat_modern_luxury_floor_kitchen",
-      "wall_material": "mat_modern_luxury_wall",
-      "ceiling_material": "mat_modern_luxury_ceiling"
-    },
-    {
-      "id": "room_4",
-      "type": "bathroom",
-      "name": "卫生间",
-      "polygon": [[2.917, 0], [4.833, 0], [4.833, 1.666], [2.917, 1.666]],
-      "area": 5.14,
-      "floor_material": "mat_modern_luxury_floor_bathroom",
-      "wall_material": "mat_modern_luxury_wall",
-      "ceiling_material": "mat_modern_luxury_ceiling"
-    }
-  ],
-  "walls": [
-    {"id": "wall_1", "start": [1.0, 0], "end": [7.5, 0], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_2", "start": [7.5, 0], "end": [7.5, 4.333], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_3", "start": [1.0, 4.333], "end": [7.5, 4.333], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_4", "start": [1.0, 0], "end": [1.0, 4.333], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_5", "start": [1.0, 1.666], "end": [7.5, 1.666], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_6", "start": [4.833, 1.666], "end": [4.833, 4.333], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]},
-    {"id": "wall_7", "start": [2.917, 0], "end": [2.917, 1.666], "height": 2.8, "thickness": 0.2, "room_refs": ["room_1"]}
-  ],
-  "openings": [
-    {
-      "id": "door_1",
-      "type": "door",
-      "wall_ref": "wall_5",
-      "position": [2.083, 1.666],
-      "width": 0.9,
-      "height": 2.1,
-      "sill_height": 0,
-      "swing": "left_inward"
-    },
-    {
-      "id": "door_2",
-      "type": "door",
-      "wall_ref": "wall_5",
-      "position": [5.833, 1.666],
-      "width": 0.9,
-      "height": 2.1,
-      "sill_height": 0,
-      "swing": "right_inward"
-    },
-    {
-      "id": "window_1",
-      "type": "window",
-      "wall_ref": "wall_4",
-      "position": [1.0, 0.833],
-      "width": 1.2,
-      "height": 1.2,
-      "sill_height": 0.9
-    },
-    {
-      "id": "window_2",
-      "type": "window",
-      "wall_ref": "wall_3",
-      "position": [4.167, 4.333],
-      "width": 1.8,
-      "height": 1.4,
-      "sill_height": 0.9
-    }
-  ],
-  "objects": [],
-  "materials": [
-    {
-      "id": "mat_modern_luxury_wall",
-      "type": "pbr",
-      "name": "modern_luxury Wall",
-      "base_color": "#C8C0B8",
-      "roughness": 0.85,
-      "metalness": 0.0
-    },
-    {
-      "id": "mat_modern_luxury_ceiling",
-      "type": "pbr",
-      "name": "modern_luxury Ceiling",
-      "base_color": "#F0EDE8",
-      "roughness": 0.9,
-      "metalness": 0.0
-    },
-    {
-      "id": "mat_modern_luxury_floor_living_room",
-      "type": "pbr",
-      "name": "modern_luxury Floor living_room",
-      "base_color": "#6B4F3A",
-      "roughness": 0.6,
-      "metalness": 0.0
-    },
-    {
-      "id": "mat_modern_luxury_floor_bedroom",
-      "type": "pbr",
-      "name": "modern_luxury Floor bedroom",
-      "base_color": "#7A6050",
-      "roughness": 0.65,
-      "metalness": 0.0
-    }
-  ],
-  "lights": [
-    {
-      "id": "light_room_1",
-      "type": "area",
-      "name": "客厅 Light",
-      "position": [2.917, 2.65, 3.0],
-      "rotation": [0, 0, 0],
-      "intensity": 500,
-      "color": "#fff4e6",
-      "size": [1.5, 1.5]
-    },
-    {
-      "id": "light_room_3",
-      "type": "point",
-      "name": "厨房 Light",
-      "position": [1.958, 2.65, 0.833],
-      "rotation": [0, 0, 0],
-      "intensity": 350,
-      "color": "#ffffff"
-    }
-  ],
-  "cameras": [
-    {
-      "id": "cam_overview",
-      "name": "Overview",
-      "type": "perspective",
-      "position": [4.25, 5.6, 8.583],
-      "target": [4.25, 0, 2.167],
-      "fov": 50
-    },
-    {
-      "id": "cam_room_1",
-      "name": "客厅",
-      "type": "perspective",
-      "position": [1.417, 1.6, 1.5],
-      "target": [2.917, 1.2, 3.0],
-      "fov": 65
-    }
-  ]
-}
-```
-
-**Key changes**:
-- All coordinates converted from **pixels** to **meters** (`pixels × meters_per_pixel`)
-- Rooms have material references assigned (`floor_material`, `wall_material`, `ceiling_material`)
-- Lights and camera presets generated
-- Doors/windows bound to nearest wall
-
-Saved to `data/pipeline/{project_id}/scene_normalized.json`.
+Normalized scene JSON with all coordinates in meters. Saved to `data/pipeline/{project_id}/scene_normalized.json`.
 
 ---
 
-## Stage 4: 3D Rendering
+## Stage 4: Geometry Repair
+
+**Module**: `src-tauri/src/pipeline/repair.rs`
+**Function**: `repair_scene(scene: &mut Value) -> Vec<String>`
+
+Runs after normalization and before validation. Automatically fixes geometry issues in VLM output. Returns a list of repair actions taken.
+
+### Repair Operations
+
+#### Room Polygon Repairs
+
+| Operation | Description | Threshold |
+|-----------|-------------|-----------|
+| Vertex snapping | Snap nearby vertices to shared coordinates | 5cm |
+| Orthogonalization | Align near-horizontal/vertical edges to exact H/V | 10° |
+| Closure repair | Append first point if polygon is unclosed | 1mm |
+| Degenerate removal | Remove rooms with too-small area | 0.5 m² |
+| Overlap detection | Detect and flag room polygon overlaps | 50% vertex containment |
+
+#### Wall Repairs
+
+| Operation | Description | Threshold |
+|-----------|-------------|-----------|
+| Endpoint snapping | Snap nearby wall endpoints to shared coordinates | 5cm |
+| Collinear merging | Merge collinear and nearby wall segments | angle < 5°, dist < 10cm |
+| room_refs repair | Fix room_refs based on wall-polygon edge matching | midpoint dist < 30cm |
+
+#### Opening Repairs
+
+| Operation | Description | Threshold |
+|-----------|-------------|-----------|
+| Rebinding | Rebind openings to nearest wall | wall_thickness × 2 |
+
+### Output
+
+Repair action log, e.g.:
+
+```
+snapped 18 polygon vertex/vertices to nearby points
+orthogonalized 3 room polygon(s)
+closed 1 unclosed polygon(s)
+snapped 6 wall endpoint(s)
+merged 2 collinear wall segment(s)
+fixed room_refs for 4 wall(s)
+rebound 1 opening(s) to closer wall
+```
+
+Saved to `data/pipeline/{project_id}/repair_log.json`.
+
+---
+
+## Stage 5: Quality Validation
+
+**Module**: `src-tauri/src/pipeline/validate.rs`
+**Function**: `validate_scene(scene: &Value, repair_actions: &[String]) -> ValidationReport`
+
+Performs comprehensive validation on the repaired scene and generates a quality report.
+
+### Validation Rules
+
+#### Room Checks
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Polygon points >= 3 | Error | Degenerate polygon |
+| Polygon closed | Error | First-last point distance > 1cm |
+| Area >= 0.5 m² | Error | Room too small |
+| No NaN/Inf coordinates | Error | Invalid coordinates |
+| Aspect ratio <= 20:1 | Warning | Extreme aspect ratio |
+| No self-intersection | Warning | Polygon may self-intersect |
+| Bedroom area >= 3 m² | Warning | Bedroom too small |
+| Bathroom area <= 30 m² | Warning | Unusually large bathroom |
+
+#### Wall Checks
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Length >= 5cm | Warning | Wall segment too short |
+| room_refs non-empty | Warning | Orphan wall |
+
+#### Opening Checks
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| wall_ref exists | Error | Unbound opening |
+| Door width 0.5–2.0m | Warning | Unusual door width |
+| Window width 0.2–4.0m | Warning | Unusual window width |
+
+#### Scale Checks
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Total extent 2–50m | Warning | Scale may be wrong |
+
+### Score Calculation
+
+```
+score = 1.0 - (error_count × 0.15 + warning_count × 0.05)
+```
+
+Score is clamped to [0, 1].
+
+### Sub-scores
+
+| Sub-score | Calculation |
+|-----------|-------------|
+| geometry_score | Heuristic based on room/wall/opening counts |
+| semantic_score | Based on room naming and type annotation completeness |
+| scale_score | Based on room areas being within reasonable ranges |
+
+### Output (ValidationReport)
+
+```json
+{
+  "valid": true,
+  "score": 0.85,
+  "errors": [],
+  "warnings": [
+    {
+      "type": "small_bedroom",
+      "message": "Bedroom '次卧' is only 2.8 m²",
+      "ids": ["room_3"]
+    }
+  ],
+  "repair_actions": [
+    "snapped 18 polygon vertex/vertices to nearby points",
+    "closed 1 unclosed polygon(s)"
+  ],
+  "parse_quality": {
+    "overall_score": 0.85,
+    "geometry_score": 0.90,
+    "semantic_score": 0.80,
+    "scale_score": 0.85,
+    "needs_user_review": false
+  }
+}
+```
+
+Saved to `data/pipeline/{project_id}/validation_report.json`.
+
+### parse_quality Injection
+
+After validation, `parse_quality` is injected into HomeSceneJSON for frontend access:
+
+```json
+{
+  "rooms": [...],
+  "walls": [...],
+  "parse_quality": {
+    "overall_score": 0.85,
+    "geometry_score": 0.90,
+    "semantic_score": 0.80,
+    "scale_score": 0.85,
+    "needs_user_review": false
+  }
+}
+```
+
+---
+
+## Stage 6: Debug Overlay
+
+**Module**: `src-tauri/src/pipeline/overlay.rs`
+**Function**: `generate_overlay(processed_path: &str, raw_vlm: &Value, pipeline_dir: &Path) -> Result<(), String>`
+
+Draws VLM parsing results back onto the preprocessed image for visual debugging.
+
+### Drawn Elements
+
+| Element | Style |
+|---------|-------|
+| Room polygons | Colored outlines (different color per room type) |
+| Room labels | Room name at centroid position |
+| Wall endpoints | Small red circles |
+| Doors | Green markers with "D" label |
+| Windows | Blue markers with "W" label |
+
+### Color Mapping
+
+| Room Type | Color |
+|-----------|-------|
+| living_room | Red |
+| bedroom | Blue |
+| kitchen | Green |
+| bathroom | Orange |
+| dining_room | Purple |
+| balcony | Yellow |
+| corridor | Gray |
+| study | Teal |
+
+### Output
+
+Saved to `data/pipeline/{project_id}/overlay_debug.png`.
+
+---
+
+## Stage 7: Furniture Planning
+
+**Module**: `src-tauri/src/pipeline/furniture.rs`
+**Function**: `plan_furniture(scene: &Value, data_dir: &Path) -> Result<Value, String>`
+
+Uses an LLM to plan furniture placement based on room type, area, and door/window positions.
+
+### Available Categories
+
+sofa, coffee_table, tv_stand, bed_double, bed_single, nightstand, wardrobe, dining_table, dining_chair, desk, bookshelf, bathroom_sink, toilet, shower, kitchen_counter, fridge
+
+### Rules
+
+- Choose appropriate furniture for each room type
+- Adjust quantity based on room area (< 8m² minimal, 8-15m² standard, > 15m² can add more)
+- Furniture positions must be within room polygons
+- Never block doorways (0.8m clearance from door positions)
+- Never place furniture in front of windows
+
+---
+
+## Stage 8: 3D Rendering
 
 **Module**: `src/engine/buildScene.ts`
 **Function**: `buildScene(scene: HomeSceneJSON) -> BuiltScene`
@@ -391,31 +388,9 @@ Saved to `data/pipeline/{project_id}/scene_normalized.json`.
 4. **Build openings** (`buildOpenings.ts`) — Door frames + door panels + window frames + glass
 5. **Build furniture** (`buildObjects.ts` + `furnitureModels.ts`) — If `objects` is empty, auto-layout furniture by room type; each category composed of multiple primitives (box + cylinder + sphere)
 
-### Input
-
-HomeSceneJSON (output of Stage 3).
-
 ### Output
 
-Three.js scene:
-
-```
-THREE.Group "home_scene_proj_abc123"
-├── THREE.Group "structure"
-│   ├── THREE.Mesh "floor_room_1"     (BoxGeometry, 4.83×0.04×3.67m, wood texture)
-│   ├── THREE.Mesh "floor_room_2"     (BoxGeometry, 2.67×0.04×2.67m, bedroom floor)
-│   ├── THREE.Mesh "wall_1"           (BoxGeometry, 6.5×2.8×0.2m, wall material)
-│   ├── THREE.Mesh "wall_2"           (BoxGeometry, ...)
-│   └── ...
-├── THREE.Group "door_1"              (frame + panel)
-├── THREE.Group "window_1"            (frame + glass)
-├── THREE.Group "obj_sofa"            (4 boxes + 4 cylinders, sofa)
-├── THREE.Group "obj_bed"             (mattress + headboard + 2 pillows)
-├── THREE.Mesh "ceiling_room_1"       (BoxGeometry, ceiling)
-└── ...
-```
-
-The entire group is added to the Three.js scene via `scene.add(builtScene.group)` in `SceneViewer.tsx`, rendering into the `<Canvas>`.
+Three.js scene, added to `<Canvas>` via `scene.add(builtScene.group)`.
 
 ---
 
@@ -428,7 +403,37 @@ Each parse run generates the following files in `data/pipeline/{project_id}/`:
 | `preprocessed.jpg` | Preprocessed image |
 | `vlm_response.json` | Raw VLM response JSON |
 | `scene_normalized.json` | Normalized HomeSceneJSON |
-| `meta.json` | Pipeline metadata (statistics, timing) |
+| `repair_log.json` | Geometry repair action log |
+| `validation_report.json` | Quality validation report |
+| `overlay_debug.png` | VLM parsing result overlay image |
+| `meta.json` | Pipeline metadata (statistics, validation score) |
+
+### meta.json Example
+
+```json
+{
+  "project_id": "proj_abc123",
+  "vlm_stats": {
+    "rooms": 4,
+    "walls": 7,
+    "doors": 2,
+    "windows": 2
+  },
+  "scene_stats": {
+    "rooms": 4,
+    "walls": 7,
+    "objects": 12,
+    "materials": 6
+  },
+  "validation": {
+    "score": 0.85,
+    "error_count": 0,
+    "warning_count": 1,
+    "repair_action_count": 3,
+    "needs_user_review": false
+  }
+}
+```
 
 ---
 
@@ -439,13 +444,13 @@ Each parse run generates the following files in `data/pipeline/{project_id}/`:
 │  Raw Floor Plan  │  JPG/PNG, ~2-5MB
 │  (pixel coords)  │
 └────────┬────────┘
-         │ preprocess_floor_plan()
+         │ preprocess()
          ▼
 ┌─────────────────┐
 │  Preprocessed    │  Cropped + rotation corrected + resized
 │  (pixel coords)  │  ~1800x1200
 └────────┬────────┘
-         │ parse_floor_plan_with_vlm()
+         │ call_vlm()
          ▼
 ┌─────────────────┐
 │  VLM Raw JSON    │  Room/wall/door/window pixel coordinates
@@ -455,7 +460,31 @@ Each parse run generates the following files in `data/pipeline/{project_id}/`:
          ▼
 ┌─────────────────┐
 │  HomeSceneJSON   │  Meter coordinates + materials + lights + cameras
-│  (meter coords)  │  Standardized scene description
+│  (meter coords)  │
+└────────┬────────┘
+         │ repair_scene()
+         ▼
+┌─────────────────┐
+│  Repaired Scene  │  Snapped vertices, orthogonalized, closed, merged
+│  (meter coords)  │  + repair_log.json
+└────────┬────────┘
+         │ validate_scene()
+         ▼
+┌─────────────────┐
+│  Validation      │  score, errors, warnings
+│  Report          │  + parse_quality injected into scene
+└────────┬────────┘
+         │ generate_overlay()
+         ▼
+┌─────────────────┐
+│  Debug Overlay   │  overlay_debug.png
+│                  │  Visual room/wall/door/window rendering
+└────────┬────────┘
+         │ plan_furniture()
+         ▼
+┌─────────────────┐
+│  Scene with      │  LLM-planned furniture layout
+│  Furniture       │
 └────────┬────────┘
          │ buildScene()
          ▼
@@ -464,3 +493,17 @@ Each parse run generates the following files in `data/pipeline/{project_id}/`:
 │  (3D render)     │  Supports walk/edit/export
 └─────────────────┘
 ```
+
+---
+
+## Frontend Integration
+
+### parse_quality Display
+
+The `parse_quality` field in HomeSceneJSON is displayed in the `SceneInspector` component:
+
+- **Score progress bar** — Color-coded: green (>= 80%), yellow (>= 50%), red (< 50%)
+- **Status icon** — Green checkmark (OK) or yellow warning triangle (needs review)
+- **Sub-scores** — Geometry, semantic, and scale dimension scores
+
+When `needs_user_review` is `true`, users are prompted to review the parsing results.

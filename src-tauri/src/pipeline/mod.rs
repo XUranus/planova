@@ -1,6 +1,9 @@
 pub mod furniture;
 pub mod normalizer;
+pub mod overlay;
 pub mod preprocess;
+pub mod repair;
+pub mod validate;
 
 use std::path::Path;
 
@@ -13,12 +16,12 @@ pub async fn run_pipeline(
     data_dir: &Path,
 ) -> Result<serde_json::Value, String> {
     // Step 1: Preprocess image
-    log::info!("Step 1/4: Preprocessing image {image_path}");
+    log::info!("Step 1/7: Preprocessing image {image_path}");
     let processed_path = preprocess::preprocess_floor_plan(image_path)?;
     log::info!("Preprocessed -> {processed_path}");
 
     // Step 2: VLM parse
-    log::info!("Step 2/4: Calling VLM to parse floor plan...");
+    log::info!("Step 2/7: Calling VLM to parse floor plan...");
     let config = crate::settings::get_llm_config_for(data_dir, "vlm");
     if config.api_key.is_empty() {
         return Err("LLM API key not configured".to_string());
@@ -33,13 +36,13 @@ pub async fn run_pipeline(
     );
 
     // Step 3: Normalize
-    log::info!("Step 3/4: Normalizing scene (style={style})...");
+    log::info!("Step 3/7: Normalizing scene (style={style})...");
     let mut scene_json = normalizer::normalize_scene(
         &raw_result,
         style,
         ceiling_height,
         wall_thickness,
-        "Untitled", // project name - could be fetched from DB
+        "Untitled",
         project_id,
     );
 
@@ -66,8 +69,50 @@ pub async fn run_pipeline(
         scene_json.get("walls").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
     );
 
-    // Step 4: Furniture planning
-    log::info!("Step 4/4: Planning furniture layout with LLM...");
+    // Step 4: Geometry repair
+    log::info!("Step 4/7: Repairing geometry...");
+    let repair_actions = repair::repair_scene(&mut scene_json);
+    if !repair_actions.is_empty() {
+        for action in &repair_actions {
+            log::info!("  Repair: {action}");
+        }
+    }
+    log::info!("Repair complete: {} action(s)", repair_actions.len());
+
+    // Step 5: Validation
+    log::info!("Step 5/7: Validating scene...");
+    let validation_report = validate::validate_scene(&scene_json, &repair_actions);
+    log::info!(
+        "Validation: score={:.0}%, {} error(s), {} warning(s)",
+        validation_report.score * 100.0,
+        validation_report.errors.len(),
+        validation_report.warnings.len(),
+    );
+    for err in &validation_report.errors {
+        log::warn!("  Error: {}", err.message);
+    }
+    for warn in &validation_report.warnings {
+        log::info!("  Warning: {}", warn.message);
+    }
+
+    // Inject parse_quality into scene JSON for frontend access
+    scene_json["parse_quality"] = serde_json::json!({
+        "overall_score": validation_report.score,
+        "geometry_score": validation_report.parse_quality.geometry_score,
+        "semantic_score": validation_report.parse_quality.semantic_score,
+        "scale_score": validation_report.parse_quality.scale_score,
+        "needs_user_review": validation_report.parse_quality.needs_user_review,
+    });
+
+    // Step 6: Generate debug overlay
+    log::info!("Step 6/7: Generating debug overlay...");
+    let pipeline_dir = data_dir.join("pipeline").join(project_id);
+    if let Err(e) = overlay::generate_overlay(&processed_path, &raw_result, &pipeline_dir) {
+        log::warn!("Failed to generate overlay: {e}");
+    }
+
+    // Step 7: Furniture planning
+    log::info!("Step 7/7: Planning furniture layout with LLM...");
     scene_json = furniture::plan_furniture(&scene_json, data_dir).await?;
     log::info!(
         "Furniture planning: {} objects placed",
@@ -75,7 +120,7 @@ pub async fn run_pipeline(
     );
 
     // Save pipeline artifacts
-    save_pipeline_artifacts(project_id, image_path, &processed_path, &raw_result, &scene_json, data_dir)?;
+    save_pipeline_artifacts(project_id, image_path, &processed_path, &raw_result, &scene_json, &validation_report, &repair_actions, data_dir)?;
 
     Ok(scene_json)
 }
@@ -86,6 +131,8 @@ fn save_pipeline_artifacts(
     processed_path: &str,
     raw_vlm: &serde_json::Value,
     scene_json: &serde_json::Value,
+    validation_report: &validate::ValidationReport,
+    repair_actions: &[String],
     data_dir: &Path,
 ) -> Result<(), String> {
     let pipeline_dir = data_dir.join("pipeline").join(project_id);
@@ -111,6 +158,18 @@ fn save_pipeline_artifacts(
         let _ = std::fs::write(&scene_path, json);
     }
 
+    // Save validation report
+    let report_path = pipeline_dir.join("validation_report.json");
+    if let Ok(json) = serde_json::to_string_pretty(validation_report) {
+        let _ = std::fs::write(&report_path, json);
+    }
+
+    // Save repair log
+    let repair_path = pipeline_dir.join("repair_log.json");
+    if let Ok(json) = serde_json::to_string_pretty(repair_actions) {
+        let _ = std::fs::write(&repair_path, json);
+    }
+
     // Save meta
     let meta = serde_json::json!({
         "project_id": project_id,
@@ -125,6 +184,13 @@ fn save_pipeline_artifacts(
             "walls": scene_json.get("walls").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
             "objects": scene_json.get("objects").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
             "materials": scene_json.get("materials").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0),
+        },
+        "validation": {
+            "score": validation_report.score,
+            "error_count": validation_report.errors.len(),
+            "warning_count": validation_report.warnings.len(),
+            "repair_action_count": repair_actions.len(),
+            "needs_user_review": validation_report.parse_quality.needs_user_review,
         },
     });
     let meta_path = pipeline_dir.join("meta.json");

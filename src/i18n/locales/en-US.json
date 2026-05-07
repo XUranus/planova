@@ -199,7 +199,13 @@
     "view_json": "JSON",
     "hide_json": "JSON",
     "edit_json": "Edit",
-    "readonly": "Read-only"
+    "readonly": "Read-only",
+    "parse_quality": "Parse Quality",
+    "parse_score": "Score",
+    "needs_review": "Needs Review",
+    "geometry": "Geometry",
+    "semantic": "Semantic",
+    "scale": "Scale"
   },
   "furniture": {
     "sofa": "Sofa",

@@ -127,6 +127,14 @@ export interface CameraPreset {
   fov: number
 }
 
+export interface ParseQuality {
+  overall_score: number
+  geometry_score: number
+  semantic_score: number
+  scale_score: number
+  needs_user_review: boolean
+}
+
 export interface HomeSceneJSON {
   schema_version: string
   project: HomeSceneProject
@@ -138,4 +146,5 @@ export interface HomeSceneJSON {
   materials: SceneMaterial[]
   lights: SceneLight[]
   cameras: CameraPreset[]
+  parse_quality?: ParseQuality
 }

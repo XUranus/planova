@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AlertTriangle, CheckCircle } from 'lucide-react'
 import { useSceneStore } from '@/stores/sceneStore'
-import type { HomeSceneJSON } from '@/types/scene'
+import type { HomeSceneJSON, ParseQuality } from '@/types/scene'
 import { SectionWrapper } from './inspector/FieldInputs'
 import {
   ObjectCard,
@@ -12,6 +13,43 @@ import {
   LightCard,
   CameraCard,
 } from './inspector/ItemCards'
+
+function ParseQualityBadge({ quality }: { quality: ParseQuality }) {
+  const { t } = useTranslation()
+  const scorePercent = Math.round(quality.overall_score * 100)
+  const isGood = scorePercent >= 80
+  const isWarning = quality.needs_user_review
+
+  return (
+    <div className="px-2 py-1.5 rounded-md border border-border bg-muted/30">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-medium text-muted-foreground">{t('inspector.parse_quality')}</span>
+        {isWarning ? (
+          <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+        ) : (
+          <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${scorePercent}%`,
+              backgroundColor: isGood ? 'hsl(142, 71%, 45%)' : isWarning ? 'hsl(38, 92%, 50%)' : 'hsl(0, 84%, 60%)',
+            }}
+          />
+        </div>
+        <span className="text-[11px] font-mono tabular-nums">{scorePercent}%</span>
+      </div>
+      <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground">
+        <span>{t('inspector.geometry')}: {Math.round(quality.geometry_score * 100)}%</span>
+        <span>{t('inspector.semantic')}: {Math.round(quality.semantic_score * 100)}%</span>
+        <span>{t('inspector.scale')}: {Math.round(quality.scale_score * 100)}%</span>
+      </div>
+    </div>
+  )
+}
 
 export function SceneInspector() {
   const { t } = useTranslation()
@@ -55,6 +93,9 @@ export function SceneInspector() {
     <div className="h-full overflow-auto px-1 py-1 space-y-0.5 scrollbar-thin">
       {isReadOnly && (
         <div className="px-1 py-0.5 text-[10px] text-muted-foreground mb-1">{t('inspector.readonly')}</div>
+      )}
+      {homeScene.parse_quality && (
+        <ParseQualityBadge quality={homeScene.parse_quality} />
       )}
       {sections.map((section) => (
         <SectionWrapper
