@@ -4,6 +4,8 @@
 
 Planova is a desktop app that turns 2D floor plan images into interactive 3D interior scenes. Upload a JPG/PNG/PDF floor plan, and the AI parses room geometry, places furniture, and generates a real-time 3D preview you can walk through, edit, and render.
 
+![screenshots/Screenshot_20260507_150455](Screenshot_20260507_150455.png)
+
 ## Features
 
 - **Floor Plan Parsing** — Upload a photo or PDF of a floor plan; AI extracts rooms, walls, doors, and windows
