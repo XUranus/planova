@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Upload, Pencil } from 'lucide-react'
@@ -39,6 +39,38 @@ export function ProjectDetail() {
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editStyle, setEditStyle] = useState<ProjectStyle>('modern_luxury')
+
+  // Resize state for right panel
+  const [panelWidth, setPanelWidth] = useState(380)
+  const panelWidthRef = useRef(panelWidth)
+  panelWidthRef.current = panelWidth
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startWidth = panelWidthRef.current
+
+    const onMouseMove = (e: MouseEvent) => {
+      e.preventDefault()
+      const delta = startX - e.clientX
+      const maxWidth = window.innerWidth * 0.5
+      const newWidth = Math.min(maxWidth, Math.max(280, startWidth + delta))
+      setPanelWidth(newWidth)
+    }
+
+    const onMouseUp = () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [])
 
   const isDemo = id ? isDemoProject(id) : false
   const demoProject = isDemo ? DEMO_PROJECTS.find((d) => d.id === id) : undefined
@@ -161,14 +193,20 @@ export function ProjectDetail() {
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* 3D Viewer */}
-        <div className="relative flex-1">
+        <div className="relative min-w-0" style={{ width: `calc(100% - ${panelWidth + 4}px)` }}>
           <SceneViewer />
           <ViewerToolbar />
           <MaterialPanel />
         </div>
 
+        {/* Resize handle */}
+        <div
+          className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary transition-colors"
+          onMouseDown={handleResizeStart}
+        />
+
         {/* Right panel with tabs */}
-        <RightPanel isDemo={isDemo} projectId={id} projectStyle={project.style} />
+        <RightPanel isDemo={isDemo} projectId={id} projectStyle={project.style} width={panelWidth} />
       </div>
 
       {/* Edit project dialog */}

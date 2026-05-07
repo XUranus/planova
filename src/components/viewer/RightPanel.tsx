@@ -12,9 +12,10 @@ interface RightPanelProps {
   isDemo: boolean
   projectId: string | undefined
   projectStyle: string
+  width?: number
 }
 
-export function RightPanel({ isDemo, projectId, projectStyle }: RightPanelProps) {
+export function RightPanel({ isDemo, projectId, projectStyle, width = 380 }: RightPanelProps) {
   const { t } = useTranslation()
   const { scenes, activeSceneId, loadScene, homeScene } = useSceneStore()
   const getFiles = useProjectStore((s) => s.getFiles)
@@ -28,7 +29,7 @@ export function RightPanel({ isDemo, projectId, projectStyle }: RightPanelProps)
   })()
 
   return (
-    <div className="w-[380px] shrink-0 overflow-hidden border-l">
+    <div className="shrink-0 overflow-hidden border-l" style={{ width }}>
       <Tabs defaultValue="scenes" className="flex h-full flex-col">
         <div className="border-b px-3 py-2">
           <TabsList className="h-8 w-full">
