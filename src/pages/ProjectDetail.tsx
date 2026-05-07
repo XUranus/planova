@@ -40,28 +40,40 @@ export function ProjectDetail() {
   const [editDesc, setEditDesc] = useState('')
   const [editStyle, setEditStyle] = useState<ProjectStyle>('modern_luxury')
 
-  // Resize state for right panel
   const [panelWidth, setPanelWidth] = useState(380)
   const panelWidthRef = useRef(panelWidth)
-  panelWidthRef.current = panelWidth
+  const viewerRef = useRef<HTMLDivElement>(null)
+  const rightPanelRef = useRef<HTMLDivElement>(null)
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
     const startWidth = panelWidthRef.current
+    let rafId = 0
+
+    const applyWidth = (w: number) => {
+      panelWidthRef.current = w
+      if (viewerRef.current) viewerRef.current.style.width = `calc(100% - ${w + 4}px)`
+      if (rightPanelRef.current) rightPanelRef.current.style.width = `${w}px`
+    }
 
     const onMouseMove = (e: MouseEvent) => {
       e.preventDefault()
-      const delta = startX - e.clientX
-      const maxWidth = window.innerWidth * 0.5
-      const newWidth = Math.min(maxWidth, Math.max(280, startWidth + delta))
-      setPanelWidth(newWidth)
+      if (rafId) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const delta = startX - e.clientX
+        const maxWidth = window.innerWidth * 0.5
+        const newWidth = Math.min(maxWidth, Math.max(280, startWidth + delta))
+        applyWidth(newWidth)
+      })
     }
 
     const onMouseUp = () => {
+      if (rafId) cancelAnimationFrame(rafId)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
+      setPanelWidth(panelWidthRef.current)
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
@@ -192,8 +204,7 @@ export function ProjectDetail() {
 
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* 3D Viewer */}
-        <div className="relative min-w-0" style={{ width: `calc(100% - ${panelWidth + 4}px)` }}>
+        <div ref={viewerRef} className="relative min-w-0" style={{ width: `calc(100% - ${panelWidth + 4}px)` }}>
           <SceneViewer />
           <ViewerToolbar />
           <MaterialPanel />
@@ -206,7 +217,7 @@ export function ProjectDetail() {
         />
 
         {/* Right panel with tabs */}
-        <RightPanel isDemo={isDemo} projectId={id} projectStyle={project.style} width={panelWidth} />
+        <RightPanel panelRef={rightPanelRef} isDemo={isDemo} projectId={id} projectStyle={project.style} width={panelWidth} />
       </div>
 
       {/* Edit project dialog */}

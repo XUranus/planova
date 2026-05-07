@@ -8,7 +8,6 @@ import { useSceneStore } from '@/stores/sceneStore'
 import { useViewerStore } from '@/stores/viewerStore'
 import type { HomeSceneJSON, SceneObject, Room, Wall, Opening, SceneMaterial, SceneLight, CameraPreset, Vec3 } from '@/types/scene'
 
-// --- Helper: update a single item in an array by id ---
 function updateArrayById<T extends { id: string }>(arr: T[], id: string, patch: Partial<T>): T[] {
   return arr.map((item) => (item.id === id ? { ...item, ...patch } : item))
 }
@@ -17,7 +16,28 @@ function deleteArrayById<T extends { id: string }>(arr: T[], id: string): T[] {
   return arr.filter((item) => item.id !== id)
 }
 
-// --- Wrapper: clickable card with selection highlight ---
+type SceneArrayKey = 'objects' | 'rooms' | 'walls' | 'openings' | 'materials' | 'lights' | 'cameras'
+
+function useItemUpdater<T extends { id: string }>(arrayKey: SceneArrayKey, id: string) {
+  const setHomeScene = useSceneStore((s) => s.setHomeScene)
+
+  const update = useCallback((patch: Partial<T>) => {
+    const homeScene = useSceneStore.getState().homeScene
+    if (!homeScene) return
+    const arr = homeScene[arrayKey] as T[]
+    setHomeScene({ ...homeScene, [arrayKey]: updateArrayById(arr, id, patch) }, 'editor')
+  }, [setHomeScene, arrayKey, id])
+
+  const handleDelete = useCallback(() => {
+    const homeScene = useSceneStore.getState().homeScene
+    if (!homeScene) return
+    const arr = homeScene[arrayKey] as T[]
+    setHomeScene({ ...homeScene, [arrayKey]: deleteArrayById(arr, id) }, 'editor')
+  }, [setHomeScene, arrayKey, id])
+
+  return { update, handleDelete }
+}
+
 interface ItemCardProps {
   id: string
   children: React.ReactNode
@@ -78,18 +98,7 @@ interface ObjectCardProps {
 
 export function ObjectCard({ item }: ObjectCardProps) {
   const { t } = useTranslation()
-  const homeScene = useSceneStore((s) => s.homeScene)
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const update = useCallback((patch: Partial<SceneObject>) => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, objects: updateArrayById(homeScene.objects, item.id, patch) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
-
-  const handleDelete = useCallback(() => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, objects: deleteArrayById(homeScene.objects, item.id) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
+  const { update, handleDelete } = useItemUpdater<SceneObject>('objects', item.id)
 
   return (
     <ItemCard id={item.id} onDelete={handleDelete}>
@@ -119,13 +128,7 @@ interface RoomCardProps {
 
 export function RoomCard({ item }: RoomCardProps) {
   const { t } = useTranslation()
-  const homeScene = useSceneStore((s) => s.homeScene)
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const update = useCallback((patch: Partial<Room>) => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, rooms: updateArrayById(homeScene.rooms, item.id, patch) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
+  const { update } = useItemUpdater<Room>('rooms', item.id)
 
   return (
     <ItemCard id={item.id}>
@@ -160,10 +163,10 @@ export function WallCard({ item }: WallCardProps) {
     <ItemCard id={item.id}>
       <span className="text-[10px] font-medium truncate">{item.id}</span>
       <FieldRow label="Start">
-        <Vec2Input value={item.start} onChange={() => {}} disabled />
+        <Vec2Input value={item.start} disabled />
       </FieldRow>
       <FieldRow label="End">
-        <Vec2Input value={item.end} onChange={() => {}} disabled />
+        <Vec2Input value={item.end} disabled />
       </FieldRow>
       <FieldRow label="H / T">
         <span className="text-[10px]">{item.height}m / {item.thickness}m</span>
@@ -200,13 +203,7 @@ interface MaterialCardProps {
 }
 
 export function MaterialCard({ item }: MaterialCardProps) {
-  const homeScene = useSceneStore((s) => s.homeScene)
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const update = useCallback((patch: Partial<SceneMaterial>) => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, materials: updateArrayById(homeScene.materials, item.id, patch) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
+  const { update } = useItemUpdater<SceneMaterial>('materials', item.id)
 
   return (
     <ItemCard id={item.id}>
@@ -231,13 +228,7 @@ interface LightCardProps {
 
 export function LightCard({ item }: LightCardProps) {
   const { t } = useTranslation()
-  const homeScene = useSceneStore((s) => s.homeScene)
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const update = useCallback((patch: Partial<SceneLight>) => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, lights: updateArrayById(homeScene.lights, item.id, patch) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
+  const { update } = useItemUpdater<SceneLight>('lights', item.id)
 
   return (
     <ItemCard id={item.id}>
@@ -262,13 +253,7 @@ interface CameraCardProps {
 
 export function CameraCard({ item }: CameraCardProps) {
   const { t } = useTranslation()
-  const homeScene = useSceneStore((s) => s.homeScene)
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const update = useCallback((patch: Partial<CameraPreset>) => {
-    if (!homeScene) return
-    setHomeScene({ ...homeScene, cameras: updateArrayById(homeScene.cameras, item.id, patch) }, 'editor')
-  }, [homeScene, setHomeScene, item.id])
+  const { update } = useItemUpdater<CameraPreset>('cameras', item.id)
 
   return (
     <ItemCard id={item.id}>

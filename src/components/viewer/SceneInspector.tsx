@@ -27,10 +27,11 @@ export function SceneInspector() {
   }, [])
 
   const handleSectionChange = useCallback((key: string, newData: unknown) => {
-    if (!homeScene) return
-    const updated = { ...homeScene, [key]: newData } as HomeSceneJSON
+    const current = useSceneStore.getState().homeScene
+    if (!current) return
+    const updated = { ...current, [key]: newData } as HomeSceneJSON
     setHomeScene(updated, 'editor')
-  }, [homeScene, setHomeScene])
+  }, [setHomeScene])
 
   if (!homeScene) {
     return (

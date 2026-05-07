@@ -13,9 +13,10 @@ interface RightPanelProps {
   projectId: string | undefined
   projectStyle: string
   width?: number
+  panelRef?: React.RefObject<HTMLDivElement | null>
 }
 
-export function RightPanel({ isDemo, projectId, projectStyle, width = 380 }: RightPanelProps) {
+export function RightPanel({ isDemo, projectId, projectStyle, width = 380, panelRef }: RightPanelProps) {
   const { t } = useTranslation()
   const { scenes, activeSceneId, loadScene, homeScene } = useSceneStore()
   const getFiles = useProjectStore((s) => s.getFiles)
@@ -29,7 +30,7 @@ export function RightPanel({ isDemo, projectId, projectStyle, width = 380 }: Rig
   })()
 
   return (
-    <div className="shrink-0 overflow-hidden border-l" style={{ width }}>
+    <div ref={panelRef} className="shrink-0 overflow-hidden border-l" style={{ width }}>
       <Tabs defaultValue="inspector" className="flex h-full flex-col">
         <div className="border-b px-3 py-2">
           <TabsList className="h-8 w-full">

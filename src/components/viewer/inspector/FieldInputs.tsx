@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react'
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Code, ChevronDown } from 'lucide-react'
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
@@ -12,7 +12,9 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { Vec2, Vec3 } from '@/types/scene'
 
-// --- FieldRow: label + value in a compact horizontal layout ---
+const MONO_FONT = "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace"
+const NOOP = () => {}
+
 interface FieldRowProps {
   label: string
   children: React.ReactNode
@@ -28,7 +30,6 @@ export function FieldRow({ label, children, className }: FieldRowProps) {
   )
 }
 
-// --- NumberInput: debounced numeric input ---
 interface NumberInputProps {
   value: number
   onChange: (v: number) => void
@@ -97,7 +98,6 @@ export function NumberInput({ value, onChange, step = 0.1, min, max, disabled, c
   )
 }
 
-// --- Vec3Input: three NumberInputs for X/Y/Z ---
 interface Vec3InputProps {
   value: Vec3
   onChange: (v: Vec3) => void
@@ -130,16 +130,15 @@ export function Vec3Input({ value, onChange, step = 0.1, disabled, labels = ['X'
   )
 }
 
-// --- Vec2Input: two NumberInputs for X/Y ---
 interface Vec2InputProps {
   value: Vec2
-  onChange: (v: Vec2) => void
+  onChange?: (v: Vec2) => void
   step?: number
   disabled?: boolean
   labels?: [string, string]
 }
 
-export function Vec2Input({ value, onChange, step = 0.1, disabled, labels = ['X', 'Y'] }: Vec2InputProps) {
+export function Vec2Input({ value, onChange = NOOP, step = 0.1, disabled, labels = ['X', 'Y'] }: Vec2InputProps) {
   const handleChange = useCallback((index: number, num: number) => {
     const next: Vec2 = [...value]
     next[index] = num
@@ -163,7 +162,6 @@ export function Vec2Input({ value, onChange, step = 0.1, disabled, labels = ['X'
   )
 }
 
-// --- ColorSwatch: small colored circle ---
 interface ColorSwatchProps {
   color: string
   size?: number
@@ -178,7 +176,6 @@ export function ColorSwatch({ color, size = 14 }: ColorSwatchProps) {
   )
 }
 
-// --- JsonToggle: "View JSON" / "Hide JSON" button ---
 interface JsonToggleProps {
   show: boolean
   onToggle: () => void
@@ -199,7 +196,6 @@ export function JsonToggle({ show, onToggle }: JsonToggleProps) {
   )
 }
 
-// --- highlightJson: lightweight regex-based JSON syntax coloring ---
 function highlightJson(json: string): React.ReactNode[] {
   const parts: React.ReactNode[] = []
   let i = 0
@@ -243,7 +239,6 @@ function highlightJson(json: string): React.ReactNode[] {
   return parts
 }
 
-// --- CodeMirror JSON editor (reusable, lightweight) ---
 function jsonLint(view: EditorView) {
   const doc = view.state.doc.toString()
   if (!doc.trim()) return []
@@ -262,7 +257,7 @@ function jsonLint(view: EditorView) {
 const editorTheme = EditorView.theme({
   '&': { height: '100%', fontSize: '12px', backgroundColor: 'transparent' },
   '.cm-scroller': {
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace",
+    fontFamily: MONO_FONT,
     overflow: 'auto',
   },
   '.cm-content': { padding: '4px 0' },
@@ -342,7 +337,6 @@ function CodeMirrorJsonEditor({ doc, onSave, onCancel }: CodeMirrorJsonEditorPro
   )
 }
 
-// --- InlineJson: syntax-highlighted, optionally editable JSON for a section ---
 interface InlineJsonProps {
   data: unknown
   onChange?: (newData: unknown) => void
@@ -375,7 +369,10 @@ export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
     }
   }, [onChange])
 
-  const monoFont = "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace"
+  const highlighted = useMemo(
+    () => highlightJson(JSON.stringify(data, null, 2)),
+    [data],
+  )
 
   if (editing) {
     return (
@@ -394,9 +391,9 @@ export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
     <div className="mt-1 group/json relative rounded bg-muted/50 overflow-hidden">
       <pre
         className="max-h-80 overflow-auto p-2 text-[11px] leading-tight whitespace-pre-wrap break-all"
-        style={{ fontFamily: monoFont }}
+        style={{ fontFamily: MONO_FONT }}
       >
-        {highlightJson(JSON.stringify(data, null, 2))}
+        {highlighted}
       </pre>
       {!readOnly && onChange && (
         <Button
@@ -412,7 +409,6 @@ export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
   )
 }
 
-// --- SectionWrapper: details/summary with count badge ---
 interface SectionWrapperProps {
   title: string
   count: number
