@@ -1,6 +1,13 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Code, ChevronDown } from 'lucide-react'
+import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view'
+import { EditorState } from '@codemirror/state'
+import { json } from '@codemirror/lang-json'
+import { linter, lintGutter } from '@codemirror/lint'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { bracketMatching, indentOnInput, foldGutter, foldKeymap } from '@codemirror/language'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { Vec2, Vec3 } from '@/types/scene'
@@ -236,6 +243,105 @@ function highlightJson(json: string): React.ReactNode[] {
   return parts
 }
 
+// --- CodeMirror JSON editor (reusable, lightweight) ---
+function jsonLint(view: EditorView) {
+  const doc = view.state.doc.toString()
+  if (!doc.trim()) return []
+  try {
+    JSON.parse(doc)
+    return []
+  } catch (e) {
+    const msg = (e as SyntaxError).message
+    const match = msg.match(/position (\d+)/)
+    const pos = match ? parseInt(match[1]) : 0
+    const line = view.state.doc.lineAt(pos)
+    return [{ from: line.from, to: line.to, severity: 'error' as const, message: msg }]
+  }
+}
+
+const editorTheme = EditorView.theme({
+  '&': { height: '100%', fontSize: '12px', backgroundColor: 'transparent' },
+  '.cm-scroller': {
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace",
+    overflow: 'auto',
+  },
+  '.cm-content': { padding: '4px 0' },
+  '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--border)', color: 'var(--muted-foreground)' },
+  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
+  '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--accent) 50%, transparent)' },
+  '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
+  '.cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--primary) 25%, transparent) !important' },
+  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--primary) 25%, transparent) !important' },
+  '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--primary) 20%, transparent)', outline: 'none' },
+  '.cm-lintPoint-error::after': { borderBottomColor: 'var(--destructive)' },
+})
+
+interface CodeMirrorJsonEditorProps {
+  doc: string
+  onSave: (content: string) => void
+  onCancel: () => void
+}
+
+function CodeMirrorJsonEditor({ doc, onSave, onCancel }: CodeMirrorJsonEditorProps) {
+  const { t } = useTranslation()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
+  const contentRef = useRef(doc)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        contentRef.current = update.state.doc.toString()
+      }
+    })
+
+    const view = new EditorView({
+      parent: containerRef.current,
+      state: EditorState.create({
+        doc,
+        extensions: [
+          lineNumbers(),
+          highlightActiveLine(),
+          history(),
+          foldGutter(),
+          indentOnInput(),
+          bracketMatching(),
+          closeBrackets(),
+          json(),
+          linter(jsonLint, { delay: 300 }),
+          lintGutter(),
+          keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...foldKeymap]),
+          editorTheme,
+          updateListener,
+        ],
+      }),
+    })
+
+    viewRef.current = view
+    // Focus and place cursor at end
+    view.focus()
+    view.dispatch({ selection: { anchor: view.state.doc.length } })
+
+    return () => { view.destroy(); viewRef.current = null }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = useCallback(() => {
+    onSave(contentRef.current)
+  }, [onSave])
+
+  return (
+    <div className="mt-1 rounded border border-border overflow-hidden">
+      <div ref={containerRef} className="h-[400px] overflow-hidden" />
+      <div className="flex gap-1 px-2 py-1.5 border-t border-border bg-muted/30">
+        <Button size="sm" className="h-6 px-3 text-xs" onClick={handleSave}>{t('common.save')}</Button>
+        <Button size="sm" variant="ghost" className="h-6 px-3 text-xs" onClick={onCancel}>{t('common.cancel')}</Button>
+      </div>
+    </div>
+  )
+}
+
 // --- InlineJson: syntax-highlighted, optionally editable JSON for a section ---
 interface InlineJsonProps {
   data: unknown
@@ -246,48 +352,40 @@ interface InlineJsonProps {
 export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const startEdit = useCallback(() => {
-    setDraft(JSON.stringify(data, null, 2))
     setError(null)
     setEditing(true)
-  }, [data])
+  }, [])
 
   const cancelEdit = useCallback(() => {
     setEditing(false)
     setError(null)
   }, [])
 
-  const saveEdit = useCallback(() => {
+  const saveEdit = useCallback((content: string) => {
     try {
-      const parsed = JSON.parse(draft)
+      const parsed = JSON.parse(content)
       setEditing(false)
       setError(null)
       onChange?.(parsed)
     } catch (e) {
       setError((e as SyntaxError).message)
     }
-  }, [draft, onChange])
+  }, [onChange])
 
-  const fontFamily = "'Monaco', 'Menlo', 'Cascadia Code', 'Consolas', monospace"
+  const monoFont = "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace"
 
   if (editing) {
     return (
-      <div className="mt-1 rounded border border-border overflow-hidden">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          spellCheck={false}
-          className="w-full max-h-60 min-h-[120px] resize-y bg-muted/30 p-2 text-[11px] leading-tight whitespace-pre outline-none"
-          style={{ fontFamily }}
+      <div>
+        <CodeMirrorJsonEditor
+          doc={JSON.stringify(data, null, 2)}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
         />
-        {error && <div className="px-2 py-0.5 text-[10px] text-destructive bg-destructive/10">{error}</div>}
-        <div className="flex gap-1 px-2 py-1 border-t border-border bg-muted/30">
-          <Button size="sm" className="h-5 px-2 text-[10px]" onClick={saveEdit}>{t('common.save')}</Button>
-          <Button size="sm" variant="ghost" className="h-5 px-2 text-[10px]" onClick={cancelEdit}>{t('common.cancel')}</Button>
-        </div>
+        {error && <div className="mt-0.5 px-2 py-0.5 text-[10px] text-destructive bg-destructive/10 rounded">{error}</div>}
       </div>
     )
   }
@@ -295,8 +393,8 @@ export function InlineJson({ data, onChange, readOnly }: InlineJsonProps) {
   return (
     <div className="mt-1 group/json relative rounded bg-muted/50 overflow-hidden">
       <pre
-        className="max-h-60 overflow-auto p-2 text-[11px] leading-tight whitespace-pre-wrap break-all"
-        style={{ fontFamily }}
+        className="max-h-80 overflow-auto p-2 text-[11px] leading-tight whitespace-pre-wrap break-all"
+        style={{ fontFamily: monoFont }}
       >
         {highlightJson(JSON.stringify(data, null, 2))}
       </pre>

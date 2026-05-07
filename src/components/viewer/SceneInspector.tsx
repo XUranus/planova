@@ -17,14 +17,20 @@ export function SceneInspector() {
   const { t } = useTranslation()
   const homeScene = useSceneStore((s) => s.homeScene)
   const projectId = useSceneStore((s) => s.projectId)
+  const setHomeScene = useSceneStore((s) => s.setHomeScene)
   const isReadOnly = projectId === null
 
-  // Track which sections have "View JSON" toggled
   const [showJson, setShowJson] = useState<Record<string, boolean>>({})
 
   const toggleJson = useCallback((key: string) => {
     setShowJson((prev) => ({ ...prev, [key]: !prev[key] }))
   }, [])
+
+  const handleSectionChange = useCallback((key: string, newData: unknown) => {
+    if (!homeScene) return
+    const updated = { ...homeScene, [key]: newData } as HomeSceneJSON
+    setHomeScene(updated, 'editor')
+  }, [homeScene, setHomeScene])
 
   if (!homeScene) {
     return (
@@ -33,14 +39,6 @@ export function SceneInspector() {
       </div>
     )
   }
-
-  const setHomeScene = useSceneStore((s) => s.setHomeScene)
-
-  const handleSectionChange = useCallback((key: string, newData: unknown) => {
-    if (!homeScene) return
-    const updated = { ...homeScene, [key]: newData } as HomeSceneJSON
-    setHomeScene(updated, 'editor')
-  }, [homeScene, setHomeScene])
 
   const sections = [
     { key: 'objects', title: t('inspector.objects'), count: homeScene.objects.length, data: homeScene.objects, defaultOpen: true },
