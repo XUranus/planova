@@ -4,7 +4,7 @@
 
 Planova 是一款桌面应用，能将 2D 户型图转化为可交互的 3D 室内场景。上传 JPG/PNG/PDF 格式的户型图，AI 自动解析房间结构、摆放家具，生成实时 3D 预览，支持漫游、编辑和渲染。
 
-![screenshots/Screenshot_20260507_150455](Screenshot_20260507_150455.png)
+![Screenshot_20260507_150455](screenshots/Screenshot_20260507_150455.png)
 
 ## 功能特性
 
