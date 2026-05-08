@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::alignment::AlignmentScores;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationReport {
     pub valid: bool,
@@ -9,6 +11,8 @@ pub struct ValidationReport {
     pub warnings: Vec<ValidationIssue>,
     pub repair_actions: Vec<String>,
     pub parse_quality: ParseQuality,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_alignment: Option<ImageAlignmentReport>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,10 +28,27 @@ pub struct ParseQuality {
     pub geometry_score: f64,
     pub semantic_score: f64,
     pub scale_score: f64,
+    pub image_alignment_score: f64,
     pub needs_user_review: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageAlignmentReport {
+    pub wall_iou: f64,
+    pub wall_precision: f64,
+    pub wall_recall: f64,
+    pub overall: f64,
+}
+
 pub fn validate_scene(scene: &Value, repair_actions: &[String]) -> ValidationReport {
+    validate_scene_with_alignment(scene, repair_actions, None)
+}
+
+pub fn validate_scene_with_alignment(
+    scene: &Value,
+    repair_actions: &[String],
+    alignment: Option<&AlignmentScores>,
+) -> ValidationReport {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
@@ -43,7 +64,17 @@ pub fn validate_scene(scene: &Value, repair_actions: &[String]) -> ValidationRep
     let geometry_score = compute_geometry_score(scene);
     let semantic_score = compute_semantic_score(scene);
     let scale_score = compute_scale_score(scene);
-    let needs_user_review = score < 0.8 || error_count > 0.0;
+    let image_alignment_score = alignment.map(|a| a.overall).unwrap_or(1.0);
+    // Only require review for errors or poor alignment. Warnings alone (e.g., orphan walls
+    // from centroid subdivision) don't warrant review if alignment is good.
+    let needs_user_review = error_count > 0.0 || image_alignment_score < 0.75;
+
+    let image_alignment = alignment.map(|a| ImageAlignmentReport {
+        wall_iou: a.wall_iou,
+        wall_precision: a.wall_precision,
+        wall_recall: a.wall_recall,
+        overall: a.overall,
+    });
 
     ValidationReport {
         valid: errors.is_empty(),
@@ -55,8 +86,10 @@ pub fn validate_scene(scene: &Value, repair_actions: &[String]) -> ValidationRep
             geometry_score: (geometry_score * 100.0).round() / 100.0,
             semantic_score: (semantic_score * 100.0).round() / 100.0,
             scale_score: (scale_score * 100.0).round() / 100.0,
+            image_alignment_score: (image_alignment_score * 100.0).round() / 100.0,
             needs_user_review,
         },
+        image_alignment,
     }
 }
 
