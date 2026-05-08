@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, State};
 use crate::db::AppState;
 use crate::models::{GenerationTask, TaskResponse};
+use crate::storage;
 
 fn now_utc() -> String {
     chrono::Utc::now().to_rfc3339()
@@ -420,4 +421,40 @@ pub fn get_task_pipeline(
     });
 
     Ok(meta)
+}
+
+fn read_json_optional(path: &std::path::Path) -> serde_json::Value {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn read_base64_optional(path: &std::path::Path) -> String {
+    storage::read_file_as_base64(&path.to_string_lossy()).unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn get_pipeline_artifacts(
+    state: State<'_, AppState>,
+    project_id: String,
+) -> Result<serde_json::Value, String> {
+    let pipeline_dir = state.data_dir.join("pipeline").join(&project_id);
+
+    if !pipeline_dir.exists() {
+        return Err("Pipeline artifacts not found".to_string());
+    }
+
+    let meta = read_json_optional(&pipeline_dir.join("meta.json"));
+    let overlay_base64 = read_base64_optional(&pipeline_dir.join("overlay_alignment.png"));
+    let diagnosis = read_json_optional(&pipeline_dir.join("diagnosis.json"));
+    let wall_mask_base64 = read_base64_optional(&pipeline_dir.join("wall_mask.png"));
+
+    Ok(serde_json::json!({
+        "meta": meta,
+        "overlay_alignment": overlay_base64,
+        "diagnosis": diagnosis,
+        "wall_mask": wall_mask_base64,
+        "project_id": project_id,
+    }))
 }

@@ -30,6 +30,37 @@ Return ONLY this JSON object, no other text:
 
 pub const FLOORPLAN_PARSE_USER: &str = r#"Output ONLY the JSON object described in the system prompt. Polygon coordinates in image pixels. Follow actual wall lines for room shapes. No explanation."#;
 
+pub const FLOORPLAN_PARSE_HYBRID_SYSTEM: &str = r#"You are an architectural floor plan SEMANTIC analyst.
+The system has already extracted wall geometry from the image using computer vision.
+Your job is to provide SEMANTIC information only:
+
+1. ROOM IDENTIFICATION: For each visible room, provide:
+   - room_type (living_room, bedroom, kitchen, bathroom, dining_room, balcony, corridor, study)
+   - name (Chinese label from the image, e.g., "客厅", "主卧")
+   - centroid approximate pixel position [x, y]
+   - confidence (0.0-1.0)
+
+2. DOOR DETECTION: For each visible door:
+   - position [x, y] in pixels
+   - width in meters (estimate from scale markers)
+   - connected room types
+   - swing direction
+
+3. WINDOW DETECTION: For each visible window:
+   - position [x, y] in pixels
+   - width in meters
+
+4. SCALE DETECTION:
+   - Find dimension markers (numbers like 1800, 3600 in mm)
+   - Report meters_per_pixel ratio
+   - Report any scale candidates found
+
+DO NOT output wall segments or room polygons — the CV system handles geometry.
+Return ONLY this JSON object, no other text:
+{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","centroid":[x,y],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"warnings":[]}"#;
+
+pub const FLOORPLAN_PARSE_HYBRID_USER: &str = r#"Output ONLY the JSON object described in the system prompt. Focus on semantic information only — room labels, doors, windows, and scale. Do NOT output wall geometry. No explanation."#;
+
 pub const FURNITURE_PLANNER_SYSTEM: &str = r#"You are an interior designer. Given room descriptions (type, area, polygon, door/window positions), plan furniture placement for each room.
 
 AVAILABLE CATEGORIES (use ONLY these exact keys):

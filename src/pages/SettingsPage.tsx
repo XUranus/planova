@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/i18n'
-import { Eye, EyeOff, Save, Loader2, Zap, CheckCircle2, XCircle, Globe } from 'lucide-react'
+import { Eye, EyeOff, Save, Loader2, Zap, CheckCircle2, XCircle, Globe, Cpu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -121,6 +121,7 @@ function ProviderCard({
 export function SettingsPage() {
   const { t } = useTranslation()
   const [language, setLanguage] = useState(i18n.language || 'en-US')
+  const [pipelineMode, setPipelineMode] = useState('hybrid_cv_vlm')
   const [llmVlm, setLlmVlm] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
   const [llmChat, setLlmChat] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
   const [llmImage, setLlmImage] = useState<LlmProvider>({ base_url: '', api_key: '', model: '' })
@@ -139,6 +140,7 @@ export function SettingsPage() {
     try {
       const data = await getSettings()
       setLanguage(data.language || i18n.language || 'en-US')
+      setPipelineMode(data.pipeline_mode || 'hybrid_cv_vlm')
       setLlmVlm(data.llm_vlm || { base_url: '', api_key: '', model: '' })
       setLlmChat(data.llm_chat || { base_url: '', api_key: '', model: '' })
       setLlmImage(data.llm_image || { base_url: '', api_key: '', model: '' })
@@ -162,6 +164,7 @@ export function SettingsPage() {
     try {
       await updateSettings({
         language,
+        pipeline_mode: pipelineMode,
         llm_vlm: llmVlm,
         llm_chat: llmChat,
         llm_image: llmImage,
@@ -232,6 +235,36 @@ export function SettingsPage() {
                 onClick={() => handleLanguageChange(lang.code)}
               >
                 {lang.label}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pipeline Mode */}
+      <Card>
+        <CardHeader className="px-5 py-4">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Cpu className="h-4 w-4" />
+            {t('settings.pipeline_mode')}
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {t('settings.pipeline_mode_desc')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="px-5 pb-5 pt-0">
+          <div className="flex gap-2">
+            {[
+              { value: 'hybrid_cv_vlm', label: t('settings.mode_hybrid') },
+              { value: 'legacy', label: t('settings.mode_legacy') },
+            ].map((mode) => (
+              <Button
+                key={mode.value}
+                variant={pipelineMode === mode.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPipelineMode(mode.value)}
+              >
+                {mode.label}
               </Button>
             ))}
           </div>

@@ -329,7 +329,7 @@ fn point_to_segment_distance(p: &[f64; 2], a: &[f64; 2], b: &[f64; 2]) -> f64 {
     ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt()
 }
 
-fn polygon_area(polygon: &[[f64; 2]]) -> f64 {
+pub fn polygon_area(polygon: &[[f64; 2]]) -> f64 {
     let n = polygon.len();
     if n < 3 {
         return 0.0;
@@ -343,7 +343,8 @@ fn polygon_area(polygon: &[[f64; 2]]) -> f64 {
     area.abs() / 2.0
 }
 
-fn generate_cameras(rooms: &[serde_json::Value], _ceiling_height: f64) -> Vec<serde_json::Value> {
+
+pub fn generate_cameras(rooms: &[serde_json::Value], _ceiling_height: f64) -> Vec<serde_json::Value> {
     let mut cameras = Vec::new();
 
     let mut all_points: Vec<(f64, f64)> = Vec::new();
@@ -433,7 +434,7 @@ fn generate_cameras(rooms: &[serde_json::Value], _ceiling_height: f64) -> Vec<se
     cameras
 }
 
-fn generate_lights(rooms: &[serde_json::Value], ceiling_height: f64) -> Vec<serde_json::Value> {
+pub fn generate_lights(rooms: &[serde_json::Value], ceiling_height: f64) -> Vec<serde_json::Value> {
     let light_y = ceiling_height - 0.15;
     let mut lights = Vec::new();
 

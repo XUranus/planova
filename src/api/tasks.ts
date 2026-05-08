@@ -73,3 +73,22 @@ export async function getTaskByFile(fileId: string): Promise<TaskInfo | null> {
     return null
   }
 }
+
+export interface PipelineArtifacts {
+  meta: Record<string, unknown>
+  overlay_alignment: string // base64 data URL
+  diagnosis: {
+    missing_wall_regions: Array<{ bbox: number[]; description: string }>
+    extra_wall_regions: Array<{ bbox: number[]; description: string }>
+    scale_suspicious: boolean
+    scale_reason?: string
+    room_coverage: number
+  }
+  wall_mask: string // base64 data URL
+  project_id: string
+}
+
+export async function getPipelineArtifacts(projectId: string): Promise<PipelineArtifacts> {
+  const res = await invoke<PipelineArtifacts>('get_pipeline_artifacts', { projectId })
+  return res
+}

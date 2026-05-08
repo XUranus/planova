@@ -102,9 +102,38 @@ pub async fn call_vlm(
     config: &LlmConfig,
     data_dir: &Path,
 ) -> Result<serde_json::Value, String> {
+    call_vlm_with_prompts(
+        image_path, config, data_dir,
+        crate::ai::prompts::FLOORPLAN_PARSE_SYSTEM,
+        crate::ai::prompts::FLOORPLAN_PARSE_USER,
+        "VLM",
+    ).await
+}
+
+pub async fn call_vlm_hybrid(
+    image_path: &str,
+    config: &LlmConfig,
+    data_dir: &Path,
+) -> Result<serde_json::Value, String> {
+    call_vlm_with_prompts(
+        image_path, config, data_dir,
+        crate::ai::prompts::FLOORPLAN_PARSE_HYBRID_SYSTEM,
+        crate::ai::prompts::FLOORPLAN_PARSE_HYBRID_USER,
+        "Hybrid VLM",
+    ).await
+}
+
+async fn call_vlm_with_prompts(
+    image_path: &str,
+    config: &LlmConfig,
+    data_dir: &Path,
+    system_prompt: &str,
+    user_prompt: &str,
+    label: &str,
+) -> Result<serde_json::Value, String> {
     let (b64_image, media_type) = encode_image_base64(image_path)?;
     log::info!(
-        "Encoded image {} ({} base64 chars)",
+        "Encoded image {} ({} base64 chars) for {label}",
         image_path,
         b64_image.len()
     );
@@ -116,17 +145,11 @@ pub async fn call_vlm(
     );
 
     let messages = serde_json::json!([
-        {
-            "role": "system",
-            "content": crate::ai::prompts::FLOORPLAN_PARSE_SYSTEM,
-        },
+        { "role": "system", "content": system_prompt },
         {
             "role": "user",
             "content": [
-                {
-                    "type": "text",
-                    "text": crate::ai::prompts::FLOORPLAN_PARSE_USER,
-                },
+                { "type": "text", "text": user_prompt },
                 {
                     "type": "image_url",
                     "image_url": {
@@ -145,7 +168,7 @@ pub async fn call_vlm(
         "temperature": 0.1,
     });
 
-    log::info!("Calling VLM model={} base_url={}", config.model, config.base_url);
+    log::info!("Calling {label} model={} base_url={}", config.model, config.base_url);
 
     let t0 = std::time::Instant::now();
     let mut error_msg: Option<String> = None;
@@ -174,7 +197,7 @@ pub async fn call_vlm(
                         usage = body.get("usage").cloned();
 
                         log::info!(
-                            "VLM response: {} chars, {} tokens, {:.0}ms",
+                            "{label} response: {} chars, {} tokens, {:.0}ms",
                             response_content.len(),
                             usage.as_ref()
                                 .and_then(|u| u.get("total_tokens"))
@@ -184,7 +207,7 @@ pub async fn call_vlm(
                         );
 
                         if response_content.is_empty() {
-                            Err("VLM returned empty response".to_string())
+                            Err(format!("{label} returned empty response"))
                         } else {
                             extract_json(&response_content)
                         }
@@ -199,7 +222,7 @@ pub async fn call_vlm(
         Err(e) => {
             let duration_ms = t0.elapsed().as_millis() as f64;
             error_msg = Some(format!("Request failed: {e}"));
-            log::error!("VLM call failed after {duration_ms:.0}ms: {e}");
+            log::error!("{label} call failed after {duration_ms:.0}ms: {e}");
             Err(error_msg.clone().unwrap())
         }
     };
@@ -207,7 +230,7 @@ pub async fn call_vlm(
     // Audit log
     let messages_arr = vec![serde_json::json!({
         "role": "system",
-        "content": crate::ai::prompts::FLOORPLAN_PARSE_SYSTEM,
+        "content": system_prompt,
     })];
     crate::ai::audit::log_llm_call(
         data_dir,

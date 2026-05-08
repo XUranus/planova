@@ -19,6 +19,7 @@ import { SceneViewer } from '@/components/viewer/SceneViewer'
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar'
 import { MaterialPanel } from '@/components/viewer/MaterialPanel'
 import { RightPanel } from '@/components/viewer/RightPanel'
+import { ReviewGate } from '@/components/viewer/ReviewGate'
 import type { ProjectStyle } from '@/types/project'
 import { PROJECT_STYLES } from '@/types/project'
 
@@ -32,7 +33,7 @@ export function ProjectDetail() {
   const fetchProjects = useProjectStore((s) => s.fetchProjects)
   const syncUpdateProject = useProjectStore((s) => s.syncUpdateProject)
   const projects = useProjectStore((s) => s.projects)
-  const { loadTestScene, fetchScenes, scenes } = useSceneStore()
+  const { loadTestScene, fetchScenes, scenes, pendingReviewSceneId, reviewSceneData, reviewFileId } = useSceneStore()
 
   // Edit dialog state
   const [editOpen, setEditOpen] = useState(false)
@@ -203,22 +204,26 @@ export function ProjectDetail() {
       </div>
 
       {/* Content */}
-      <div className="flex flex-1 overflow-hidden">
-        <div ref={viewerRef} className="relative min-w-0" style={{ width: `calc(100% - ${panelWidth + 4}px)` }}>
-          <SceneViewer />
-          <ViewerToolbar />
-          <MaterialPanel />
+      {pendingReviewSceneId && reviewSceneData ? (
+        <ReviewGate projectId={id!} sceneData={reviewSceneData} fileId={reviewFileId ?? undefined} />
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          <div ref={viewerRef} className="relative min-w-0" style={{ width: `calc(100% - ${panelWidth + 4}px)` }}>
+            <SceneViewer />
+            <ViewerToolbar />
+            <MaterialPanel />
+          </div>
+
+          {/* Resize handle */}
+          <div
+            className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary transition-colors"
+            onMouseDown={handleResizeStart}
+          />
+
+          {/* Right panel with tabs */}
+          <RightPanel panelRef={rightPanelRef} isDemo={isDemo} projectId={id} projectStyle={project.style} width={panelWidth} />
         </div>
-
-        {/* Resize handle */}
-        <div
-          className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary transition-colors"
-          onMouseDown={handleResizeStart}
-        />
-
-        {/* Right panel with tabs */}
-        <RightPanel panelRef={rightPanelRef} isDemo={isDemo} projectId={id} projectStyle={project.style} width={panelWidth} />
-      </div>
+      )}
 
       {/* Edit project dialog */}
       {!isDemo && (

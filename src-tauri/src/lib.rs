@@ -68,6 +68,7 @@ pub fn run() {
             commands::tasks::get_task_by_file,
             commands::tasks::cancel_task,
             commands::tasks::get_task_pipeline,
+            commands::tasks::get_pipeline_artifacts,
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::test_llm_connection,

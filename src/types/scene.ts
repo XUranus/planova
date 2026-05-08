@@ -132,7 +132,24 @@ export interface ParseQuality {
   geometry_score: number
   semantic_score: number
   scale_score: number
+  image_alignment_score: number
   needs_user_review: boolean
+  image_alignment?: ImageAlignmentReport
+}
+
+export interface ImageAlignmentReport {
+  wall_iou: number
+  wall_precision: number
+  wall_recall: number
+  overall: number
+}
+
+export interface DiagnosisReport {
+  missing_wall_regions: Array<{ bbox: number[]; description: string }>
+  extra_wall_regions: Array<{ bbox: number[]; description: string }>
+  scale_suspicious: boolean
+  scale_reason?: string
+  room_coverage: number
 }
 
 export interface HomeSceneJSON {

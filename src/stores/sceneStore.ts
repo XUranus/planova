@@ -5,6 +5,7 @@ import type { BuiltObject } from '@/engine/buildObjects'
 import { testScenes, type TestSceneId } from '@/data/testScenes'
 import * as scenesApi from '@/api/scenes'
 import type { SceneInfo } from '@/api/scenes'
+import { retryParse as retryParseFile } from '@/api/files'
 
 interface SceneState {
   // Multi-scene list
@@ -17,6 +18,12 @@ interface SceneState {
   builtGroup: THREE.Group | null
   projectId: string | null
 
+  // Review gate
+  pendingReviewSceneId: string | null
+  reviewSceneData: HomeSceneJSON | null
+  reviewFileId: string | null
+  isRetrying: boolean
+
   // JSON editor anti-loop: tracks last editor-originated change
   lastEditorChange: number
 
@@ -26,9 +33,17 @@ interface SceneState {
   loadTestScene: (sceneId: TestSceneId) => void
   fetchScenes: (projectId: string) => Promise<void>
   loadScene: (sceneId: string) => Promise<void>
+  acceptReview: () => void
+  retryParse: (fileId: string) => Promise<void>
   saveScene: () => Promise<void>
   clearScene: () => void
 }
+
+const CLEAR_REVIEW = {
+  pendingReviewSceneId: null,
+  reviewSceneData: null,
+  reviewFileId: null,
+} as const
 
 export const useSceneStore = create<SceneState>((set, get) => ({
   scenes: [],
@@ -37,6 +52,10 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   builtObjects: [],
   builtGroup: null,
   projectId: null,
+  pendingReviewSceneId: null,
+  reviewSceneData: null,
+  reviewFileId: null,
+  isRetrying: false,
   lastEditorChange: 0,
 
   setHomeScene: (scene, source = '3d') => {
@@ -52,17 +71,39 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   loadTestScene: (sceneId) => {
     const scene = testScenes[sceneId]
     if (scene) {
-      set({ homeScene: scene, projectId: null, activeSceneId: null, scenes: [] })
+      set({
+        homeScene: scene,
+        projectId: null,
+        activeSceneId: null,
+        scenes: [],
+        ...CLEAR_REVIEW,
+      })
     }
   },
 
   fetchScenes: async (projectId) => {
     const scenes = await scenesApi.listScenes(projectId)
     set({ scenes, projectId })
-    // Auto-load first scene if none is active
     const { activeSceneId } = get()
-    if (!activeSceneId && scenes.length > 0) {
-      await get().loadScene(scenes[0].id)
+    if (activeSceneId || scenes.length === 0) return
+
+    const sceneInfo = await scenesApi.getScene(scenes[0].id)
+    if (!sceneInfo) return
+
+    if (sceneInfo.sceneJson?.parse_quality?.needs_user_review) {
+      set({
+        pendingReviewSceneId: scenes[0].id,
+        reviewSceneData: sceneInfo.sceneJson,
+        reviewFileId: sceneInfo.fileId,
+        projectId: sceneInfo.projectId,
+      })
+    } else {
+      set({
+        homeScene: sceneInfo.sceneJson,
+        activeSceneId: scenes[0].id,
+        projectId: sceneInfo.projectId,
+        ...CLEAR_REVIEW,
+      })
     }
   },
 
@@ -73,7 +114,32 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         homeScene: sceneInfo.sceneJson,
         activeSceneId: sceneId,
         projectId: sceneInfo.projectId,
+        ...CLEAR_REVIEW,
       })
+    }
+  },
+
+  acceptReview: () => {
+    const { pendingReviewSceneId, reviewSceneData } = get()
+    if (pendingReviewSceneId && reviewSceneData) {
+      set({
+        homeScene: reviewSceneData,
+        activeSceneId: pendingReviewSceneId,
+        ...CLEAR_REVIEW,
+      })
+    }
+  },
+
+  retryParse: async (fileId: string) => {
+    set({ isRetrying: true })
+    try {
+      await retryParseFile(fileId)
+      const { projectId } = get()
+      if (projectId) {
+        await get().fetchScenes(projectId)
+      }
+    } finally {
+      set({ isRetrying: false })
     }
   },
 
@@ -83,5 +149,11 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     await scenesApi.updateScene(activeSceneId, homeScene)
   },
 
-  clearScene: () => set({ homeScene: null, projectId: null, activeSceneId: null, scenes: [] }),
+  clearScene: () => set({
+    homeScene: null,
+    projectId: null,
+    activeSceneId: null,
+    scenes: [],
+    ...CLEAR_REVIEW,
+  }),
 }))

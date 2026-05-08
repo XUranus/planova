@@ -4,6 +4,7 @@ use serde_json::Value;
 
 const DEFAULT_SETTINGS: &str = r#"{
     "language": "en-US",
+    "pipeline_mode": "hybrid_cv_vlm",
     "llm_vlm": {
         "base_url": "",
         "api_key": "",
@@ -87,6 +88,16 @@ pub fn get_llm_config_for(data_dir: &Path, capability: &str) -> LlmConfig {
 
 pub fn get_llm_config(data_dir: &Path) -> LlmConfig {
     get_llm_config_for(data_dir, "vlm")
+}
+
+/// Get pipeline mode: "hybrid_cv_vlm" or "legacy"
+pub fn get_pipeline_mode(data_dir: &Path) -> String {
+    let settings = get_settings(data_dir);
+    settings
+        .get("pipeline_mode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("hybrid_cv_vlm")
+        .to_string()
 }
 
 pub fn mask_api_key(key: &str) -> String {
