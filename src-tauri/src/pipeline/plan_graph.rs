@@ -267,7 +267,51 @@ pub fn build_plan_graph(
         .collect();
 
     // Extract scale
-    let scale_candidates = extract_scale_candidates(vlm_response);
+    let mut scale_candidates = extract_scale_candidates(vlm_response, _image_width, _image_height);
+
+    // CV fallback: assume typical residential floor plan longest wall extent ≈ 15-30m
+    if !wall_segments.is_empty() {
+        let mut max_extent: f64 = 0.0;
+        for seg in &wall_segments {
+            let dx = (seg.end[0] - seg.start[0]).abs();
+            let dy = (seg.end[1] - seg.start[1]).abs();
+            // Track individual segment lengths — longest wall line
+            let len = (dx * dx + dy * dy).sqrt();
+            if len > max_extent {
+                max_extent = len;
+            }
+        }
+        // Also check overall bounding box extent
+        let (min_x, max_x, min_y, max_y) = wall_segments.iter().fold(
+            (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
+            |(mnx, mxx, mny, mxy), s| {
+                let sx = s.start[0].min(s.end[0]);
+                let ex = s.start[0].max(s.end[0]);
+                let sy = s.start[1].min(s.end[1]);
+                let ey = s.start[1].max(s.end[1]);
+                (mnx.min(sx), mxx.max(ex), mny.min(sy), mxy.max(ey))
+            },
+        );
+        let bbox_extent = (max_x - min_x).max(max_y - min_y);
+        let extent_px = max_extent.max(bbox_extent);
+
+        if extent_px > 100.0 {
+            let cv_mpp = 20.0 / extent_px;
+            let total_w = _image_width as f64 * cv_mpp;
+            let total_h = _image_height as f64 * cv_mpp;
+            if total_w >= 1.0 && total_w <= 50.0 && total_h >= 1.0 && total_h <= 50.0 {
+                log::info!(
+                    "CV fallback scale: extent={:.0}px → mpp={:.5} → {:.1}×{:.1}m",
+                    extent_px, cv_mpp, total_w, total_h
+                );
+                scale_candidates.push(ScaleCandidate {
+                    meters_per_pixel: cv_mpp,
+                    source_text: "cv_wall_extent".into(),
+                    confidence: 0.35,
+                });
+            }
+        }
+    }
 
     let source = if wall_graph.segments.len() >= 3 {
         "hybrid_cv_vlm".to_string()
@@ -297,8 +341,8 @@ pub fn build_plan_graph(
     }
 }
 
-/// Generate per-room faces by subdividing the wall bounding box around VLM centroids.
-/// Each centroid gets a rectangular face bounded by midpoints to neighboring centroids.
+/// Generate per-room faces by clustering centroids by X and subdividing by Y within each cluster.
+/// Rooms that share an X band are stacked vertically; rooms alone in a band span full height.
 fn generate_faces_from_centroids(
     labels: &[RoomLabel],
     wall_segments: &[WallSegment],
@@ -314,75 +358,101 @@ fn generate_faces_from_centroids(
     let bx1 = max_x - margin;
     let by1 = max_y - margin;
 
-    // Collect sorted X and Y coordinates of clamped centroids
-    let mut xs: Vec<f64> = labels.iter().map(|l| l.centroid[0].max(bx0).min(bx1)).collect();
-    let mut ys: Vec<f64> = labels.iter().map(|l| l.centroid[1].max(by0).min(by1)).collect();
-    xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    ys.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    xs.dedup();
-    ys.dedup();
+    // Cluster centroids by X coordinate (tolerance 50px)
+    let x_tol = 50.0;
+    let mut x_clusters: Vec<Vec<usize>> = Vec::new();
+    let mut sorted_idx: Vec<usize> = (0..labels.len()).collect();
+    sorted_idx.sort_by(|&a, &b| {
+        labels[a].centroid[0].partial_cmp(&labels[b].centroid[0]).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for &i in &sorted_idx {
+        let cx = labels[i].centroid[0];
+        let mut placed = false;
+        for cluster in &mut x_clusters {
+            let cluster_cx: f64 = cluster.iter().map(|&j| labels[j].centroid[0]).sum::<f64>() / cluster.len() as f64;
+            if (cx - cluster_cx).abs() < x_tol {
+                cluster.push(i);
+                placed = true;
+                break;
+            }
+        }
+        if !placed {
+            x_clusters.push(vec![i]);
+        }
+    }
+
+    // Sort clusters left to right
+    x_clusters.sort_by(|a, b| {
+        let ax: f64 = a.iter().map(|&i| labels[i].centroid[0]).sum::<f64>() / a.len() as f64;
+        let bx: f64 = b.iter().map(|&i| labels[i].centroid[0]).sum::<f64>() / b.len() as f64;
+        ax.partial_cmp(&bx).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Compute X boundaries between clusters (midpoints)
+    let cluster_cx: Vec<f64> = x_clusters
+        .iter()
+        .map(|c| c.iter().map(|&i| labels[i].centroid[0]).sum::<f64>() / c.len() as f64)
+        .collect();
 
     let mut faces = Vec::new();
 
-    for (i, label) in labels.iter().enumerate() {
-        // Clamp centroid to wall bounding box (VLM centroids may be outside walls)
-        let cx = label.centroid[0].max(bx0).min(bx1);
-        let cy = label.centroid[1].max(by0).min(by1);
-
-        // Find X bounds: midpoints to adjacent centroids
-        let face_x0 = if cx <= xs[0] {
+    for (ci, cluster) in x_clusters.iter().enumerate() {
+        let cx0 = if ci == 0 {
             bx0
         } else {
-            let left = xs.iter().filter(|&&x| x < cx).copied().fold(f64::NEG_INFINITY, f64::max);
-            (left + cx) / 2.0
+            (cluster_cx[ci - 1] + cluster_cx[ci]) / 2.0
         };
-        let face_x1 = if cx >= xs[xs.len() - 1] {
+        let cx1 = if ci == x_clusters.len() - 1 {
             bx1
         } else {
-            let right = xs.iter().filter(|&&x| x > cx).copied().fold(f64::INFINITY, f64::min);
-            (cx + right) / 2.0
+            (cluster_cx[ci] + cluster_cx[ci + 1]) / 2.0
         };
 
-        // Find Y bounds: midpoints to adjacent centroids
-        let face_y0 = if cy <= ys[0] {
-            by0
-        } else {
-            let top = ys.iter().filter(|&&y| y < cy).copied().fold(f64::NEG_INFINITY, f64::max);
-            (top + cy) / 2.0
-        };
-        let face_y1 = if cy >= ys[ys.len() - 1] {
-            by1
-        } else {
-            let bottom = ys.iter().filter(|&&y| y > cy).copied().fold(f64::INFINITY, f64::min);
-            (cy + bottom) / 2.0
-        };
-
-        // Clamp to bounding box
-        let fx0 = face_x0.max(bx0).min(bx1);
-        let fx1 = face_x1.max(bx0).min(bx1);
-        let fy0 = face_y0.max(by0).min(by1);
-        let fy1 = face_y1.max(by0).min(by1);
-
-        if (fx1 - fx0) < 20.0 || (fy1 - fy0) < 20.0 {
-            continue; // Skip degenerate faces
-        }
-
-        let poly = vec![
-            [fx0, fy0],
-            [fx1, fy0],
-            [fx1, fy1],
-            [fx0, fy1],
-            [fx0, fy0],
-        ];
-        let area = compute_polygon_area(&poly);
-
-        faces.push(Face {
-            id: format!("face_{}", i + 1),
-            polygon: poly,
-            area_px: area,
-            label_ref: Some(label.id.clone()),
-            source: "centroid_subdivision".into(),
+        // Sort this cluster by Y
+        let mut y_sorted = cluster.clone();
+        y_sorted.sort_by(|&a, &b| {
+            labels[a].centroid[1].partial_cmp(&labels[b].centroid[1]).unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        if y_sorted.len() == 1 {
+            // Single room in this X band — spans full height
+            let idx = y_sorted[0];
+            let poly = vec![
+                [cx0, by0], [cx1, by0], [cx1, by1], [cx0, by1], [cx0, by0],
+            ];
+            faces.push(Face {
+                id: format!("face_{}", idx + 1),
+                polygon: poly.clone(),
+                area_px: compute_polygon_area(&poly),
+                label_ref: Some(labels[idx].id.clone()),
+                source: "centroid_subdivision".into(),
+            });
+        } else {
+            // Multiple rooms — subdivide by Y midpoints
+            for (j, &idx) in y_sorted.iter().enumerate() {
+                let cy0 = if j == 0 {
+                    by0
+                } else {
+                    (labels[y_sorted[j - 1]].centroid[1] + labels[idx].centroid[1]) / 2.0
+                };
+                let cy1 = if j == y_sorted.len() - 1 {
+                    by1
+                } else {
+                    (labels[idx].centroid[1] + labels[y_sorted[j + 1]].centroid[1]) / 2.0
+                };
+                let poly = vec![
+                    [cx0, cy0], [cx1, cy0], [cx1, cy1], [cx0, cy1], [cx0, cy0],
+                ];
+                faces.push(Face {
+                    id: format!("face_{}", idx + 1),
+                    polygon: poly.clone(),
+                    area_px: compute_polygon_area(&poly),
+                    label_ref: Some(labels[idx].id.clone()),
+                    source: "centroid_subdivision".into(),
+                });
+            }
+        }
     }
 
     faces
@@ -434,17 +504,38 @@ fn compute_polygon_area(polygon: &[[f64; 2]]) -> f64 {
     area.abs() / 2.0
 }
 
-fn extract_scale_candidates(vlm_response: &serde_json::Value) -> Vec<ScaleCandidate> {
+fn extract_scale_candidates(
+    vlm_response: &serde_json::Value,
+    image_width: u32,
+    image_height: u32,
+) -> Vec<ScaleCandidate> {
     let mut candidates = Vec::new();
+    let img_w = image_width as f64;
+    let img_h = image_height as f64;
 
     if let Some(scale_info) = vlm_response.get("scale_info") {
         let detected = scale_info.get("detected").and_then(|v| v.as_bool()).unwrap_or(false);
         let mpp = scale_info.get("meters_per_pixel").and_then(|v| v.as_f64());
         if let Some(mpp) = mpp {
+            // Plausibility check: reject if model dimensions would exceed 50m or be < 1m
+            let total_w = img_w * mpp;
+            let total_h = img_h * mpp;
+            let implausible = mpp <= 0.0 || total_w > 50.0 || total_h > 50.0 || total_w < 0.5 || total_h < 0.5;
+            let confidence = if implausible {
+                log::warn!(
+                    "VLM scale implausible: mpp={:.5} → {:.1}×{:.1}m, downgrading confidence",
+                    mpp, total_w, total_h
+                );
+                0.2
+            } else if detected {
+                0.8
+            } else {
+                0.4
+            };
             candidates.push(ScaleCandidate {
                 meters_per_pixel: mpp,
                 source_text: if detected { "vlm_scale_markers" } else { "vlm_default" }.into(),
-                confidence: if detected { 0.8 } else { 0.4 },
+                confidence,
             });
         }
     }
@@ -455,10 +546,18 @@ fn extract_scale_candidates(vlm_response: &serde_json::Value) -> Vec<ScaleCandid
             overall.get("width_meters").and_then(|v| v.as_f64()),
         ) {
             if wp > 0.0 && wm > 0.0 {
+                let mpp = wm / wp;
+                let total_w = img_w * mpp;
+                let total_h = img_h * mpp;
+                let confidence = if total_w > 50.0 || total_h > 50.0 || total_w < 0.5 || total_h < 0.5 {
+                    0.2
+                } else {
+                    0.75
+                };
                 candidates.push(ScaleCandidate {
-                    meters_per_pixel: wm / wp,
+                    meters_per_pixel: mpp,
                     source_text: "vlm_overall_dimensions".into(),
-                    confidence: 0.6,
+                    confidence,
                 });
             }
         }

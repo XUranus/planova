@@ -118,10 +118,10 @@ pub fn build_wall_graph(
     segments = merge_collinear_segments(segments, 8.0);
 
     // Step 5: Snap endpoints to grid
-    snap_endpoints(&mut segments, 5.0);
+    snap_endpoints(&mut segments, 8.0);
 
     // Step 6: Find junction points
-    let junctions = find_junctions(&segments, 8.0);
+    let junctions = find_junctions(&segments, 12.0);
 
     log::info!(
         "Wall graph: {} segments, {} junctions",

@@ -51,9 +51,10 @@ Your job is to provide SEMANTIC information only:
    - width in meters
 
 4. SCALE DETECTION:
-   - Find dimension markers (numbers like 1800, 3600 in mm)
-   - Report meters_per_pixel ratio
-   - Report any scale candidates found
+   - ONLY set detected=true if you can see at least TWO dimension numbers WITH dimension lines (e.g., "3600", "8400" with arrows/lines)
+   - If dimension markers are NOT clearly visible, set detected=false and meters_per_pixel=null
+   - Do NOT guess or estimate scale from wall thickness or room size alone
+   - If you see an overall dimension like "8400×6000", report overall_dimensions too
 
 DO NOT output wall segments or room polygons — the CV system handles geometry.
 Return ONLY this JSON object, no other text:

@@ -181,5 +181,13 @@ mod tests {
         assert!(rooms.len() >= 2, "Should have at least 2 rooms, got {}", rooms.len());
         assert!(alignment.overall > 0.3, "Alignment overall too low: {:.3}", alignment.overall);
         assert!(walls_with_refs > 0, "No walls have room_refs!");
+
+        // Scale validation: no room should exceed 30m in any dimension
+        for room in rooms {
+            let name = room.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+            let area = room.get("area").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let max_dim = area.sqrt();
+            assert!(max_dim < 30.0, "Room '{}' too large: {:.1}m² (max_dim={:.1}m)", name, area, max_dim);
+        }
     }
 }

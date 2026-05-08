@@ -16,7 +16,7 @@ pub fn convert_plan_graph_to_scene(
         .iter()
         .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
         .map(|c| c.meters_per_pixel)
-        .unwrap_or(0.02);
+        .unwrap_or(0.0075);
 
     log::info!("Converting PlanGraphJSON → HomeSceneJSON (mpp={:.5})", meters_per_pixel);
 

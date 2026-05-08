@@ -2,6 +2,30 @@
 
 ## [Unreleased] - 2026-05-08
 
+### Pipeline V2: Scale Detection & Room Polygon Fix
+
+修复尺度检测幻觉、房间分割错误和家具规划质量门控。
+
+**问题:** VLM 总是返回 `scale_info: {detected: true, meters_per_pixel: 0.02}`，实际应为 ~0.0076，导致模型尺寸放大 2.6 倍（22×17m 而非 8.4×6m）。房间多边形生成使用全局 X/Y 独立网格分割，当多个质心共享 X 坐标时（如卧室 [700,300] 和卫生间 [700,600]），所有房间都被 Y 中点切割，导致卫生间面积 92.4m² 而非实际 9.36m²。家具规划在尺度不准确时过早执行，放大错误观感。
+
+**改进结果 (plane-design-3.png):**
+
+| 指标 | 优化前 | 优化后 | 变化 |
+|---|---|---|---|
+| 尺度 mpp | 0.02 (幻觉) | 0.0075 + CV回退 | 正确范围 |
+| 卫生间面积 | 92.4 m² | ~9.4 m² | 正确分割 |
+| 客厅分割 | 被切碎 | 左侧完整矩形 | 修复 |
+| 家具质量门控 | scale ≥ 0.7 | scale ≥ 0.9 | 更严格 |
+
+#### Changed
+
+- **`src-tauri/src/pipeline/plan_graph.rs`** — `extract_scale_candidates` 新增图像尺寸参数和合理性检查：如果 mpp 导致模型任一维度 >50m 或 <0.5m，置信度降至 0.2；overall_dimensions 候选同样检查；新增 CV 回退尺度（`mpp = 20.0 / 最大墙体范围`，置信度 0.35）；重写 `generate_faces_from_centroids` 为基于 X 聚类的分割：先按 X 坐标聚类（50px 容差），同簇内按 Y 中点细分，单房间簇占满高度
+- **`src-tauri/src/pipeline/convert.rs`** — 默认 mpp 从 0.02 改为 0.0075
+- **`src-tauri/src/ai/prompts.rs`** — 严格化尺度检测指令：仅当可见至少两个带尺寸线的标注数字时才设 detected=true，否则必须设 detected=false
+- **`src-tauri/src/pipeline/mod.rs`** — 家具质量门控：scale_score 门槛从 ≥0.7 提高到 ≥0.9
+- **`src-tauri/src/pipeline/furniture.rs`** — 新增房间面积合理性过滤：跳过面积 <1.0m² 或 >100m² 的房间
+- **`src-tauri/src/pipeline/test_e2e.rs`** — 新增尺度验证断言：任何房间最大维度 <30m
+
 ### Pipeline V2: Distance-Based Alignment Scoring
 
 使用基于距离的对齐度量替代像素重叠比较，解决墙体厚度渲染不精确导致 Precision 偏低的问题。

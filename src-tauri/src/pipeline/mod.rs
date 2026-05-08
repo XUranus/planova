@@ -253,7 +253,7 @@ async fn run_hybrid_pipeline(
     // Step 11: Quality gate → furniture
     let pq = &validation_report.parse_quality;
     let should_plan_furniture = pq.geometry_score >= 0.8
-        && pq.scale_score >= 0.7
+        && pq.scale_score >= 0.9
         && pq.image_alignment_score >= 0.75
         && !pq.needs_user_review;
 

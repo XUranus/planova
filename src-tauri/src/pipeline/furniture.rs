@@ -49,6 +49,11 @@ pub async fn plan_furniture(
             let t = r.get("type").and_then(|v| v.as_str()).unwrap_or("");
             t != "balcony" && t != "corridor"
         })
+        .filter(|r| {
+            // Skip rooms with unreasonable areas (likely parsing errors)
+            let area = r.get("area").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            area >= 1.0 && area <= 100.0
+        })
         .collect();
     if placeable.is_empty() {
         return Ok(scene);
