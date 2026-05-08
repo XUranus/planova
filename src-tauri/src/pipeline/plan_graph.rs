@@ -165,15 +165,23 @@ pub fn build_plan_graph(
         .collect();
 
     // If no faces from VLM polygons but we have labels with centroids,
-    // generate per-room faces from wall bounding box subdivision
+    // try wall-based topology first, then fall back to centroid subdivision
     if faces.is_empty() && !labels.is_empty() && !wall_segments.is_empty() {
-        log::info!(
-            "No VLM polygons, generating per-room faces from {} centroids",
-            labels.len()
-        );
-        let faces_from_centroids =
-            generate_faces_from_centroids(&labels, &wall_segments);
-        faces.extend(faces_from_centroids);
+        // Try wall-based room generation (uses actual wall positions as dividers)
+        let faces_from_walls =
+            generate_faces_from_walls(&labels, &wall_segments, _image_width, _image_height);
+        if !faces_from_walls.is_empty() {
+            log::info!("Generated {} faces from wall grid topology", faces_from_walls.len());
+            faces.extend(faces_from_walls);
+        } else {
+            log::info!(
+                "Wall grid failed, falling back to centroid subdivision for {} labels",
+                labels.len()
+            );
+            let faces_from_centroids =
+                generate_faces_from_centroids(&labels, &wall_segments);
+            faces.extend(faces_from_centroids);
+        }
     }
 
     // If still no faces, generate a single fallback face from wall bounding box
@@ -211,7 +219,7 @@ pub fn build_plan_graph(
     }
 
     // Extract doors
-    let doors: Vec<DoorCandidate> = vlm_response
+    let mut doors: Vec<DoorCandidate> = vlm_response
         .get("detected_doors")
         .and_then(|v| v.as_array())
         .unwrap_or(&vec![])
@@ -243,7 +251,7 @@ pub fn build_plan_graph(
         .collect();
 
     // Extract windows
-    let windows: Vec<WindowCandidate> = vlm_response
+    let mut windows: Vec<WindowCandidate> = vlm_response
         .get("detected_windows")
         .and_then(|v| v.as_array())
         .unwrap_or(&vec![])
@@ -266,16 +274,18 @@ pub fn build_plan_graph(
         })
         .collect();
 
+    // Snap doors and windows to nearest walls, validate room references
+    snap_openings_to_walls(&mut doors, &mut windows, &wall_segments, &labels, 60.0);
+
     // Extract scale
     let mut scale_candidates = extract_scale_candidates(vlm_response, _image_width, _image_height);
 
-    // CV fallback: assume typical residential floor plan longest wall extent ≈ 15-30m
+    // CV fallback: assume typical residential floor plan longest dimension ≈ 6-12m
     if !wall_segments.is_empty() {
         let mut max_extent: f64 = 0.0;
         for seg in &wall_segments {
             let dx = (seg.end[0] - seg.start[0]).abs();
             let dy = (seg.end[1] - seg.start[1]).abs();
-            // Track individual segment lengths — longest wall line
             let len = (dx * dx + dy * dy).sqrt();
             if len > max_extent {
                 max_extent = len;
@@ -296,10 +306,10 @@ pub fn build_plan_graph(
         let extent_px = max_extent.max(bbox_extent);
 
         if extent_px > 100.0 {
-            let cv_mpp = 20.0 / extent_px;
+            let cv_mpp = 8.0 / extent_px;
             let total_w = _image_width as f64 * cv_mpp;
             let total_h = _image_height as f64 * cv_mpp;
-            if total_w >= 1.0 && total_w <= 50.0 && total_h >= 1.0 && total_h <= 50.0 {
+            if total_w >= 1.0 && total_w <= 20.0 && total_h >= 1.0 && total_h <= 20.0 {
                 log::info!(
                     "CV fallback scale: extent={:.0}px → mpp={:.5} → {:.1}×{:.1}m",
                     extent_px, cv_mpp, total_w, total_h
@@ -307,7 +317,7 @@ pub fn build_plan_graph(
                 scale_candidates.push(ScaleCandidate {
                     meters_per_pixel: cv_mpp,
                     source_text: "cv_wall_extent".into(),
-                    confidence: 0.35,
+                    confidence: 0.45,
                 });
             }
         }
@@ -473,6 +483,252 @@ fn wall_bbox(wall_segments: &[WallSegment]) -> (f64, f64, f64, f64) {
     (min_x, min_y, max_x, max_y)
 }
 
+/// Point-to-segment distance. Returns (distance, projected_point).
+fn point_to_segment_dist(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> (f64, [f64; 2]) {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let len_sq = dx * dx + dy * dy;
+    if len_sq < 1e-10 {
+        let d = ((px - ax).powi(2) + (py - ay).powi(2)).sqrt();
+        return (d, [ax, ay]);
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / len_sq;
+    let t = t.max(0.0).min(1.0);
+    let proj_x = ax + t * dx;
+    let proj_y = ay + t * dy;
+    let d = ((px - proj_x).powi(2) + (py - proj_y).powi(2)).sqrt();
+    (d, [proj_x, proj_y])
+}
+
+/// Snap doors and windows to nearest wall segments. Validates room references.
+fn snap_openings_to_walls(
+    doors: &mut Vec<DoorCandidate>,
+    windows: &mut Vec<WindowCandidate>,
+    wall_segments: &[WallSegment],
+    labels: &[RoomLabel],
+    max_snap_distance: f64,
+) {
+    // Build valid room name set from labels
+    let valid_rooms: std::collections::HashSet<String> = labels.iter()
+        .flat_map(|l| vec![l.room_type.clone(), l.name.clone()])
+        .collect();
+
+    // Snap doors
+    for door in doors.iter_mut() {
+        let (dist, proj) = find_nearest_wall_point(door.position[0], door.position[1], wall_segments);
+        if dist <= max_snap_distance {
+            door.position = proj;
+            log::info!("Snapped door {} to wall (dist={:.1}px)", door.id, dist);
+        } else {
+            log::warn!("Door {} at [{:.0},{:.0}] is {:.0}px from nearest wall, downgrading confidence",
+                door.id, door.position[0], door.position[1], dist);
+            door.confidence = (door.confidence * 0.5).min(0.3);
+        }
+        // Filter invalid room references
+        door.connected_rooms.retain(|r| valid_rooms.contains(r));
+    }
+
+    // Snap windows
+    for win in windows.iter_mut() {
+        let (dist, proj) = find_nearest_wall_point(win.position[0], win.position[1], wall_segments);
+        if dist <= max_snap_distance {
+            win.position = proj;
+            // Update wall_side based on nearest wall orientation
+            if let Some(nearest) = find_nearest_wall_segment(win.position[0], win.position[1], wall_segments) {
+                win.wall_side = if (nearest.end[1] - nearest.start[1]).abs() < (nearest.end[0] - nearest.start[0]).abs() {
+                    let wall_y = (nearest.start[1] + nearest.end[1]) / 2.0;
+                    if win.position[1] < wall_y { "south" } else { "north" }.to_string()
+                } else {
+                    let wall_x = (nearest.start[0] + nearest.end[0]) / 2.0;
+                    if win.position[0] < wall_x { "east" } else { "west" }.to_string()
+                };
+            }
+            log::info!("Snapped window {} to wall (dist={:.1}px)", win.id, dist);
+        } else {
+            log::warn!("Window {} at [{:.0},{:.0}] is {:.0}px from nearest wall, downgrading confidence",
+                win.id, win.position[0], win.position[1], dist);
+            win.confidence = (win.confidence * 0.5).min(0.3);
+        }
+    }
+}
+
+/// Find the nearest point on any wall segment to the given point.
+fn find_nearest_wall_point(px: f64, py: f64, segments: &[WallSegment]) -> (f64, [f64; 2]) {
+    let mut best_dist = f64::INFINITY;
+    let mut best_proj = [px, py];
+    for seg in segments {
+        let (d, proj) = point_to_segment_dist(px, py, seg.start[0], seg.start[1], seg.end[0], seg.end[1]);
+        if d < best_dist {
+            best_dist = d;
+            best_proj = proj;
+        }
+    }
+    (best_dist, best_proj)
+}
+
+/// Find the nearest wall segment to the given point.
+fn find_nearest_wall_segment<'a>(px: f64, py: f64, segments: &'a [WallSegment]) -> Option<&'a WallSegment> {
+    let mut best_dist = f64::INFINITY;
+    let mut best_seg = None;
+    for seg in segments {
+        let (d, _) = point_to_segment_dist(px, py, seg.start[0], seg.start[1], seg.end[0], seg.end[1]);
+        if d < best_dist {
+            best_dist = d;
+            best_seg = Some(seg);
+        }
+    }
+    best_seg
+}
+
+/// Generate room faces using actual wall positions as dividers.
+/// Collects X coords from vertical walls, Y from horizontal walls to form a grid,
+/// then assigns grid cells to nearest room centroid.
+fn generate_faces_from_walls(
+    labels: &[RoomLabel],
+    wall_segments: &[WallSegment],
+    image_width: u32,
+    image_height: u32,
+) -> Vec<Face> {
+    if labels.is_empty() || wall_segments.is_empty() {
+        return Vec::new();
+    }
+
+    let margin = 20.0;
+    let bx0 = margin;
+    let by0 = margin;
+    let bx1 = image_width as f64 - margin;
+    let by1 = image_height as f64 - margin;
+
+    // Collect dominant X coordinates from vertical walls
+    let mut v_xs: Vec<f64> = wall_segments.iter()
+        .filter(|s| (s.end[0] - s.start[0]).abs() < (s.end[1] - s.start[1]).abs())
+        .map(|s| (s.start[0] + s.end[0]) / 2.0)
+        .collect();
+    v_xs.push(bx0);
+    v_xs.push(bx1);
+    v_xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Snap nearby X coordinates (within 20px)
+    let mut snap_xs: Vec<f64> = Vec::new();
+    for &x in &v_xs {
+        if snap_xs.is_empty() || (x - *snap_xs.last().unwrap()) > 20.0 {
+            snap_xs.push(x);
+        } else {
+            // Average with last
+            let last = snap_xs.len() - 1;
+            snap_xs[last] = (snap_xs[last] + x) / 2.0;
+        }
+    }
+
+    // Collect dominant Y coordinates from horizontal walls
+    let mut h_ys: Vec<f64> = wall_segments.iter()
+        .filter(|s| (s.end[1] - s.start[1]).abs() < (s.end[0] - s.start[0]).abs())
+        .map(|s| (s.start[1] + s.end[1]) / 2.0)
+        .collect();
+    h_ys.push(by0);
+    h_ys.push(by1);
+    h_ys.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Snap nearby Y coordinates
+    let mut snap_ys: Vec<f64> = Vec::new();
+    for &y in &h_ys {
+        if snap_ys.is_empty() || (y - *snap_ys.last().unwrap()) > 20.0 {
+            snap_ys.push(y);
+        } else {
+            let last = snap_ys.len() - 1;
+            snap_ys[last] = (snap_ys[last] + y) / 2.0;
+        }
+    }
+
+    if snap_xs.len() < 2 || snap_ys.len() < 2 {
+        log::warn!("Wall grid too sparse ({} x-lines, {} y-lines), falling back to centroid subdivision",
+            snap_xs.len(), snap_ys.len());
+        return Vec::new();
+    }
+
+    log::info!("Wall grid: {} X dividers, {} Y dividers → {} cells",
+        snap_xs.len(), snap_ys.len(),
+        (snap_xs.len() - 1) * (snap_ys.len() - 1));
+
+    // Assign each cell to the nearest room centroid
+    // Then merge adjacent cells with the same room
+    let nx = snap_xs.len() - 1;
+    let ny = snap_ys.len() - 1;
+    let mut cell_owner: Vec<Vec<usize>> = vec![vec![usize::MAX; ny]; nx];
+
+    for ci in 0..nx {
+        for cj in 0..ny {
+            let cell_cx = (snap_xs[ci] + snap_xs[ci + 1]) / 2.0;
+            let cell_cy = (snap_ys[cj] + snap_ys[cj + 1]) / 2.0;
+
+            // Find nearest label
+            let mut best_dist = f64::INFINITY;
+            let mut best_label = 0;
+            for (li, label) in labels.iter().enumerate() {
+                let d = ((cell_cx - label.centroid[0]).powi(2) + (cell_cy - label.centroid[1]).powi(2)).sqrt();
+                if d < best_dist {
+                    best_dist = d;
+                    best_label = li;
+                }
+            }
+            cell_owner[ci][cj] = best_label;
+        }
+    }
+
+    // For each label, find all cells belonging to it and merge into one polygon
+    let mut faces = Vec::new();
+    for (li, label) in labels.iter().enumerate() {
+        let mut min_cx = usize::MAX;
+        let mut max_cx = 0usize;
+        let mut min_cy = usize::MAX;
+        let mut max_cy = 0usize;
+        let mut found = false;
+
+        for ci in 0..nx {
+            for cj in 0..ny {
+                if cell_owner[ci][cj] == li {
+                    found = true;
+                    min_cx = min_cx.min(ci);
+                    max_cx = max_cx.max(ci);
+                    min_cy = min_cy.min(cj);
+                    max_cy = max_cy.max(cj);
+                }
+            }
+        }
+
+        if !found {
+            continue;
+        }
+
+        let poly = vec![
+            [snap_xs[min_cx], snap_ys[min_cy]],
+            [snap_xs[max_cx + 1], snap_ys[min_cy]],
+            [snap_xs[max_cx + 1], snap_ys[max_cy + 1]],
+            [snap_xs[min_cx], snap_ys[max_cy + 1]],
+            [snap_xs[min_cx], snap_ys[min_cy]],
+        ];
+        let area = compute_polygon_area(&poly);
+
+        if area > 100.0 {
+            faces.push(Face {
+                id: format!("face_{}", li + 1),
+                polygon: poly,
+                area_px: area,
+                label_ref: Some(label.id.clone()),
+                source: "wall_grid".into(),
+            });
+        }
+    }
+
+    if faces.len() == labels.len() {
+        log::info!("Wall-based faces: generated {} room faces from wall grid", faces.len());
+    } else {
+        log::warn!("Wall-based faces: got {} faces for {} labels", faces.len(), labels.len());
+    }
+
+    faces
+}
+
 fn compute_centroid(polygon: &Vec<serde_json::Value>) -> Option<[f64; 2]> {
     let mut sx = 0.0;
     let mut sy = 0.0;
@@ -517,10 +773,10 @@ fn extract_scale_candidates(
         let detected = scale_info.get("detected").and_then(|v| v.as_bool()).unwrap_or(false);
         let mpp = scale_info.get("meters_per_pixel").and_then(|v| v.as_f64());
         if let Some(mpp) = mpp {
-            // Plausibility check: reject if model dimensions would exceed 50m or be < 1m
+            // Plausibility check: residential plans rarely exceed 20m per axis
             let total_w = img_w * mpp;
             let total_h = img_h * mpp;
-            let implausible = mpp <= 0.0 || total_w > 50.0 || total_h > 50.0 || total_w < 0.5 || total_h < 0.5;
+            let implausible = mpp <= 0.0 || total_w > 20.0 || total_h > 20.0 || total_w < 0.5 || total_h < 0.5;
             let confidence = if implausible {
                 log::warn!(
                     "VLM scale implausible: mpp={:.5} → {:.1}×{:.1}m, downgrading confidence",
@@ -549,7 +805,7 @@ fn extract_scale_candidates(
                 let mpp = wm / wp;
                 let total_w = img_w * mpp;
                 let total_h = img_h * mpp;
-                let confidence = if total_w > 50.0 || total_h > 50.0 || total_w < 0.5 || total_h < 0.5 {
+                let confidence = if total_w > 20.0 || total_h > 20.0 || total_w < 0.5 || total_h < 0.5 {
                     0.2
                 } else {
                     0.75
@@ -560,6 +816,50 @@ fn extract_scale_candidates(
                     confidence,
                 });
             }
+        }
+    }
+
+    // Cross-validate from dimension annotations
+    if let Some(annotations) = vlm_response.get("dimension_annotations").and_then(|v| v.as_array()) {
+        let mut annotation_mpps: Vec<f64> = Vec::new();
+        for ann in annotations {
+            if let (Some(text), Some(direction)) = (
+                ann.get("text").and_then(|v| v.as_str()),
+                ann.get("direction").and_then(|v| v.as_str()),
+            ) {
+                // Parse the dimension value (assumed in mm)
+                if let Ok(dim_mm) = text.parse::<f64>() {
+                    let dim_m = dim_mm / 1000.0;
+                    if dim_m > 0.5 && dim_m < 30.0 {
+                        // Estimate wall length in pixels from the direction
+                        let wall_len_px = if direction == "horizontal" {
+                            img_w * 0.8 // rough estimate of wall extent
+                        } else {
+                            img_h * 0.8
+                        };
+                        let mpp = dim_m / wall_len_px;
+                        let total_w = img_w * mpp;
+                        let total_h = img_h * mpp;
+                        if total_w >= 1.0 && total_w <= 20.0 && total_h >= 1.0 && total_h <= 20.0 {
+                            annotation_mpps.push(mpp);
+                        }
+                    }
+                }
+            }
+        }
+        if !annotation_mpps.is_empty() {
+            annotation_mpps.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let median_mpp = annotation_mpps[annotation_mpps.len() / 2];
+            log::info!(
+                "Dimension annotation scale: median mpp={:.5} from {} annotations → {:.1}×{:.1}m",
+                median_mpp, annotation_mpps.len(),
+                img_w * median_mpp, img_h * median_mpp
+            );
+            candidates.push(ScaleCandidate {
+                meters_per_pixel: median_mpp,
+                source_text: "dimension_annotations".into(),
+                confidence: 0.9,
+            });
         }
     }
 

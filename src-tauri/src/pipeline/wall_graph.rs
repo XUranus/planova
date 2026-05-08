@@ -117,6 +117,11 @@ pub fn build_wall_graph(
     // Step 4: Merge collinear segments
     segments = merge_collinear_segments(segments, 8.0);
 
+    // Step 4b: Collapse parallel wall edges into centerlines
+    segments = merge_parallel_segments(segments, 30.0);
+    // Re-merge collinear after parallel merge
+    segments = merge_collinear_segments(segments, 8.0);
+
     // Step 5: Snap endpoints to grid
     snap_endpoints(&mut segments, 8.0);
 
@@ -450,4 +455,89 @@ fn find_junctions(segments: &[WallSegment], threshold: f64) -> Vec<[f64; 2]> {
     }
 
     junctions
+}
+
+/// Merge parallel segments that represent opposite edges of the same thick wall.
+/// Groups segments by perpendicular position (Y for horizontal, X for vertical),
+/// clusters those within `dist_threshold`, and outputs one centerline segment per cluster.
+fn merge_parallel_segments(segments: Vec<WallSegment>, dist_threshold: f64) -> Vec<WallSegment> {
+    let h_segments: Vec<&WallSegment> = segments.iter().filter(|s| s.orientation == "horizontal").collect();
+    let v_segments: Vec<&WallSegment> = segments.iter().filter(|s| s.orientation == "vertical").collect();
+
+    let mut result = Vec::new();
+
+    // Merge horizontal segments by Y coordinate
+    let mut h_sorted: Vec<(f64, &WallSegment)> = h_segments.iter()
+        .map(|s| ((s.start[1] + s.end[1]) / 2.0, *s))
+        .collect();
+    h_sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut i = 0;
+    while i < h_sorted.len() {
+        let mut cluster_y_sum = h_sorted[i].0;
+        let mut cluster_count = 1;
+        let mut min_x = h_sorted[i].1.start[0].min(h_sorted[i].1.end[0]);
+        let mut max_x = h_sorted[i].1.start[0].max(h_sorted[i].1.end[0]);
+        let mut j = i + 1;
+        while j < h_sorted.len() && h_sorted[j].0 - h_sorted[i].0 < dist_threshold {
+            cluster_y_sum += h_sorted[j].0;
+            cluster_count += 1;
+            min_x = min_x.min(h_sorted[j].1.start[0].min(h_sorted[j].1.end[0]));
+            max_x = max_x.max(h_sorted[j].1.start[0].max(h_sorted[j].1.end[0]));
+            j += 1;
+        }
+        let center_y = cluster_y_sum / cluster_count as f64;
+        if max_x - min_x > 20.0 {
+            result.push(WallSegment {
+                id: h_sorted[i].1.id.clone(),
+                start: [min_x, center_y],
+                end: [max_x, center_y],
+                orientation: "horizontal".into(),
+                source: "cv_hough".into(),
+                confidence: 0.8,
+            });
+        }
+        i = j;
+    }
+
+    // Merge vertical segments by X coordinate
+    let mut v_sorted: Vec<(f64, &WallSegment)> = v_segments.iter()
+        .map(|s| ((s.start[0] + s.end[0]) / 2.0, *s))
+        .collect();
+    v_sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut i = 0;
+    while i < v_sorted.len() {
+        let mut cluster_x_sum = v_sorted[i].0;
+        let mut cluster_count = 1;
+        let mut min_y = v_sorted[i].1.start[1].min(v_sorted[i].1.end[1]);
+        let mut max_y = v_sorted[i].1.start[1].max(v_sorted[i].1.end[1]);
+        let mut j = i + 1;
+        while j < v_sorted.len() && v_sorted[j].0 - v_sorted[i].0 < dist_threshold {
+            cluster_x_sum += v_sorted[j].0;
+            cluster_count += 1;
+            min_y = min_y.min(v_sorted[j].1.start[1].min(v_sorted[j].1.end[1]));
+            max_y = max_y.max(v_sorted[j].1.start[1].max(v_sorted[j].1.end[1]));
+            j += 1;
+        }
+        let center_x = cluster_x_sum / cluster_count as f64;
+        if max_y - min_y > 20.0 {
+            result.push(WallSegment {
+                id: v_sorted[i].1.id.clone(),
+                start: [center_x, min_y],
+                end: [center_x, max_y],
+                orientation: "vertical".into(),
+                source: "cv_hough".into(),
+                confidence: 0.8,
+            });
+        }
+        i = j;
+    }
+
+    log::info!(
+        "Parallel merge: {} segments → {} centerlines (threshold={:.0})",
+        segments.len(), result.len(), dist_threshold
+    );
+
+    result
 }

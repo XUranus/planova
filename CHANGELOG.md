@@ -2,6 +2,31 @@
 
 ## [Unreleased] - 2026-05-08
 
+### Pipeline V3: Wall Cleanup, Door/Window Binding & Dimension Annotation Cross-Validation
+
+墙体平行边合并、门窗墙体吸附、尺度交叉验证、墙体网格房间分割。
+
+**问题:** VLM 仍返回 mpp=0.02（因为 50m 上限过于宽松），窗户位于 y=0（墙体外侧），门连接不存在的"走廊"房间，37 条墙段中大量重复（厚墙两侧边缘被分别检测）。
+
+**改进:**
+
+| 问题 | 修复 |
+|---|---|
+| 尺度 50m 阈值太松 | 改为 20m，VLM 幻觉 mpp=0.02 (→27.4m) 被降级为 0.2 置信度 |
+| VLM 不报告尺寸标注 | 增加 `dimension_annotations` 结构化字段，强制要求读取所有可见标注数字 |
+| CV 回退常数 20→8 | 假设典型住宅最长 6-12m，置信度 0.35→0.45 |
+| 37 条重复墙段 | 新增 `merge_parallel_segments`，按位置聚类合并平行线段为中线 |
+| 窗户在墙外 | 新增 `snap_openings_to_walls`，将门窗吸附到最近墙体 |
+| 门连不存在房间 | 验证 `connected_rooms`，移除无效房间引用 |
+| 房间多边形不准 | 新增 `generate_faces_from_walls`，用实际墙体位置做网格分割 |
+
+#### Changed
+
+- **`src-tauri/src/pipeline/plan_graph.rs`** — `extract_scale_candidates`: 合理性上限 50m→20m，新增 `dimension_annotations` 交叉验证（中位数 mpp，置信度 0.9）；CV 回退常数 20→8，置信度 0.35→0.45；新增 `snap_openings_to_walls`（点到线段距离，60px 吸附半径）；新增 `generate_faces_from_walls`（墙体坐标网格 → 最近质心分配 → 合并同房间格子）
+- **`src-tauri/src/pipeline/wall_graph.rs`** — 新增 `merge_parallel_segments`：按 Y 聚类水平线段/按 X 聚类垂直线段（30px 阈值），每簇输出一条中线段；在 `build_wall_graph` 中 Step 4 后执行并重新合并共线段
+- **`src-tauri/src/ai/prompts.rs`** — 两个 prompt 的 JSON schema 新增 `dimension_annotations` 字段；Scale 检测指令更严格；新增 Dimension Annotations 段落强制报告所有可见标注数字
+- **`src-tauri/src/pipeline/test_e2e.rs`** — Mock VLM 增加 `dimension_annotations`；新增 scale mpp 范围断言 [0.003, 0.02]
+
 ### Pipeline V2: Scale Detection & Room Polygon Fix
 
 修复尺度检测幻觉、房间分割错误和家具规划质量门控。

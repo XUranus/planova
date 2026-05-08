@@ -11,6 +11,7 @@ CRITICAL GEOMETRY RULES:
 SEMANTIC RULES:
 - Chinese labels: 客厅=living_room, 餐厅=dining_room, 厨房=kitchen, 卧室/主卧/次卧=bedroom, 卫生间/主卫/次卫=bathroom, 阳台=balcony, 过道=corridor, 书房/衣帽间=study
 - Find dimension markers (numbers like 1800, 3600 in mm) to determine scale
+- Read EVERY dimension annotation number visible and report in dimension_annotations
 - Doors are arc+line symbols; windows are parallel lines in walls
 
 WALL-ROOM RELATIONSHIPS:
@@ -26,7 +27,7 @@ CONFIDENCE CALIBRATION:
 - Do NOT guess polygon coordinates. If you cannot see a wall line clearly, mark confidence < 0.5 and use a reasonable estimate.
 
 Return ONLY this JSON object, no other text:
-{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","polygon":[[x,y],...],"confidence":0.0-1.0}],"detected_walls":[{"start":[x,y],"end":[x,y],"room_refs":["room_id_1","room_id_2"],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"overall_dimensions":{"width_pixels":float,"height_pixels":float,"width_meters":float,"height_meters":float},"warnings":[]}"#;
+{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","polygon":[[x,y],...],"confidence":0.0-1.0}],"detected_walls":[{"start":[x,y],"end":[x,y],"room_refs":["room_id_1","room_id_2"],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"dimension_annotations":[{"text":"string","position":[x,y],"direction":"horizontal|vertical"}],"overall_dimensions":{"width_pixels":float,"height_pixels":float,"width_meters":float,"height_meters":float},"warnings":[]}"#;
 
 pub const FLOORPLAN_PARSE_USER: &str = r#"Output ONLY the JSON object described in the system prompt. Polygon coordinates in image pixels. Follow actual wall lines for room shapes. No explanation."#;
 
@@ -54,11 +55,17 @@ Your job is to provide SEMANTIC information only:
    - ONLY set detected=true if you can see at least TWO dimension numbers WITH dimension lines (e.g., "3600", "8400" with arrows/lines)
    - If dimension markers are NOT clearly visible, set detected=false and meters_per_pixel=null
    - Do NOT guess or estimate scale from wall thickness or room size alone
-   - If you see an overall dimension like "8400×6000", report overall_dimensions too
+
+5. DIMENSION ANNOTATIONS (MANDATORY if visible):
+   - Read EVERY number with dimension arrows/lines visible in the image
+   - For each: report the number text, approximate pixel position, and direction (horizontal/vertical)
+   - Common values: 8400, 6000, 4500, 3900, 3600, 2400, 1800 (in mm)
+   - If you see ANY dimension numbers, you MUST report them in dimension_annotations
+   - Also report overall_dimensions if you can see the total width and height
 
 DO NOT output wall segments or room polygons — the CV system handles geometry.
 Return ONLY this JSON object, no other text:
-{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","centroid":[x,y],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"warnings":[]}"#;
+{"detected_rooms":[{"type":"living_room|bedroom|kitchen|bathroom|dining_room|balcony|corridor|study","name":"string","centroid":[x,y],"confidence":0.0-1.0}],"detected_doors":[{"position":[x,y],"width_meters":float,"connected_rooms":["r1","r2"],"swing_direction":"left_inward|right_inward|left_outward|right_outward","confidence":0.0-1.0}],"detected_windows":[{"position":[x,y],"width_meters":float,"wall_side":"north|south|east|west","confidence":0.0-1.0}],"scale_info":{"detected":bool,"meters_per_pixel":float},"dimension_annotations":[{"text":"string","position":[x,y],"direction":"horizontal|vertical"}],"overall_dimensions":{"width_pixels":float,"height_pixels":float,"width_meters":float,"height_meters":float},"warnings":[]}"#;
 
 pub const FLOORPLAN_PARSE_HYBRID_USER: &str = r#"Output ONLY the JSON object described in the system prompt. Focus on semantic information only — room labels, doors, windows, and scale. Do NOT output wall geometry. No explanation."#;
 

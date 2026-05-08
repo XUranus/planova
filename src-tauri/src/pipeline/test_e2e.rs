@@ -106,7 +106,7 @@ mod tests {
         let mask_path = wall_mask::extract_wall_mask(&processed, pipeline_dir).unwrap();
         let wall_graph = wall_graph::build_wall_graph(&mask_path, pipeline_dir).unwrap();
 
-        // Mock VLM response (same as real one)
+        // Mock VLM response with dimension annotations
         let vlm_response = serde_json::json!({
             "detected_rooms": [
                 {"type": "living_room", "name": "客厅", "centroid": [225, 300], "confidence": 0.9},
@@ -121,7 +121,11 @@ mod tests {
                 {"position": [150, 600], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7},
                 {"position": [300, 600], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7}
             ],
-            "scale_info": {"detected": true, "meters_per_pixel": 0.01}
+            "scale_info": {"detected": true, "meters_per_pixel": 0.01},
+            "dimension_annotations": [
+                {"text": "8400", "position": [600, 100], "direction": "horizontal"},
+                {"text": "6000", "position": [100, 500], "direction": "vertical"}
+            ]
         });
 
         let pg = plan_graph::build_plan_graph(&wall_graph, &vlm_response, img_w, img_h);
@@ -181,6 +185,13 @@ mod tests {
         assert!(rooms.len() >= 2, "Should have at least 2 rooms, got {}", rooms.len());
         assert!(alignment.overall > 0.3, "Alignment overall too low: {:.3}", alignment.overall);
         assert!(walls_with_refs > 0, "No walls have room_refs!");
+
+        // Scale mpp should be in realistic range for residential plans
+        let best_mpp = pg.scale_candidates.iter()
+            .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|c| c.meters_per_pixel)
+            .unwrap_or(0.0);
+        assert!(best_mpp > 0.003 && best_mpp < 0.02, "Scale mpp={:.5} outside realistic range [0.003, 0.02]", best_mpp);
 
         // Scale validation: no room should exceed 30m in any dimension
         for room in rooms {
