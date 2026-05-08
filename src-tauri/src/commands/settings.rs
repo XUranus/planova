@@ -69,7 +69,10 @@ pub async fn test_llm_connection(
         return Ok(result);
     }
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let base = config.base_url.trim_end_matches('/');
     let t0 = std::time::Instant::now();
 

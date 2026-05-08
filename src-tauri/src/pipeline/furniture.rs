@@ -160,7 +160,22 @@ pub async fn plan_furniture(
         placeable.len()
     );
 
-    match ai_client::call_llm_text(&messages, &config, data_dir, 4096).await {
+    let max_retries: u32 = 2;
+    let mut llm_result: Result<String, String> = Err("not started".to_string());
+    for attempt in 1..=max_retries {
+        llm_result = ai_client::call_llm_text(&messages, &config, data_dir, 4096).await;
+        match &llm_result {
+            Ok(_) => break,
+            Err(e) if (e.contains("timed out") || e.contains("timeout")) && attempt < max_retries => {
+                let wait = 5 * attempt as u64;
+                log::warn!("Furniture LLM attempt {attempt}/{max_retries} timed out, retrying in {wait}s...");
+                tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+            }
+            Err(_) => break,
+        }
+    }
+
+    match llm_result {
         Ok(response_text) => {
             match ai_client::extract_json(&response_text) {
                 Ok(parsed) => {

@@ -138,7 +138,10 @@ async fn call_vlm_with_prompts(
         b64_image.len()
     );
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let url = format!(
         "{}/chat/completions",
         config.base_url.trim_end_matches('/')
@@ -170,79 +173,89 @@ async fn call_vlm_with_prompts(
 
     log::info!("Calling {label} model={} base_url={}", config.model, config.base_url);
 
-    let t0 = std::time::Instant::now();
-    let mut error_msg: Option<String> = None;
-    let mut response_content = String::new();
-    let mut usage: Option<serde_json::Value> = None;
+    // Retry loop: up to 3 attempts, retry on timeout only
+    let max_retries = 3u32;
+    for attempt in 1..=max_retries {
+        let t0 = std::time::Instant::now();
+        let mut error_msg: Option<String> = None;
+        let mut response_content = String::new();
+        let mut usage: Option<serde_json::Value> = None;
 
-    let result = match client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", config.api_key))
-        .json(&request_body)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            let duration_ms = t0.elapsed().as_millis() as f64;
+        let result: Result<serde_json::Value, String> = match client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", config.api_key))
+            .json(&request_body)
+            .send()
+            .await
+        {
+            Ok(response) => {
+                if !response.status().is_success() {
+                    let status = response.status();
+                    let body_text = response.text().await.unwrap_or_default();
+                    error_msg = Some(format!("HTTP {status}: {}", &body_text[..body_text.len().min(200)]));
+                    Err(error_msg.clone().unwrap())
+                } else {
+                    match response.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            response_content = extract_message_content(&body);
+                            usage = body.get("usage").cloned();
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let body_text = response.text().await.unwrap_or_default();
-                error_msg = Some(format!("HTTP {status}: {}", &body_text[..body_text.len().min(200)]));
-                Err(error_msg.clone().unwrap())
-            } else {
-                match response.json::<serde_json::Value>().await {
-                    Ok(body) => {
-                        response_content = extract_message_content(&body);
-                        usage = body.get("usage").cloned();
+                            log::info!(
+                                "{label} response: {} chars, {} tokens, {:.0}ms",
+                                response_content.len(),
+                                usage.as_ref()
+                                    .and_then(|u| u.get("total_tokens"))
+                                    .and_then(|t| t.as_u64())
+                                    .unwrap_or(0),
+                                t0.elapsed().as_millis()
+                            );
 
-                        log::info!(
-                            "{label} response: {} chars, {} tokens, {:.0}ms",
-                            response_content.len(),
-                            usage.as_ref()
-                                .and_then(|u| u.get("total_tokens"))
-                                .and_then(|t| t.as_u64())
-                                .unwrap_or(0),
-                            duration_ms
-                        );
-
-                        if response_content.is_empty() {
-                            Err(format!("{label} returned empty response"))
-                        } else {
-                            extract_json(&response_content)
+                            if response_content.is_empty() {
+                                Err(format!("{label} returned empty response"))
+                            } else {
+                                extract_json(&response_content)
+                            }
                         }
-                    }
-                    Err(e) => {
-                        error_msg = Some(format!("Failed to parse response: {e}"));
-                        Err(error_msg.clone().unwrap())
+                        Err(e) => {
+                            error_msg = Some(format!("Failed to parse response: {e}"));
+                            Err(error_msg.clone().unwrap())
+                        }
                     }
                 }
             }
-        }
-        Err(e) => {
-            let duration_ms = t0.elapsed().as_millis() as f64;
-            error_msg = Some(format!("Request failed: {e}"));
-            log::error!("{label} call failed after {duration_ms:.0}ms: {e}");
-            Err(error_msg.clone().unwrap())
-        }
-    };
+            Err(e) => {
+                error_msg = Some(format!("Request failed: {e}"));
+                log::error!("{label} call failed after {:.0}ms: {e}", t0.elapsed().as_millis());
+                Err(error_msg.clone().unwrap())
+            }
+        };
 
-    // Audit log
-    let messages_arr = vec![serde_json::json!({
-        "role": "system",
-        "content": system_prompt,
-    })];
-    crate::ai::audit::log_llm_call(
-        data_dir,
-        &config.model,
-        &messages_arr,
-        &response_content,
-        usage.as_ref(),
-        t0.elapsed().as_millis() as f64,
-        error_msg.as_deref(),
-    );
+        // Audit log for this attempt
+        let messages_arr = vec![serde_json::json!({
+            "role": "system",
+            "content": system_prompt,
+        })];
+        crate::ai::audit::log_llm_call(
+            data_dir,
+            &config.model,
+            &messages_arr,
+            &response_content,
+            usage.as_ref(),
+            t0.elapsed().as_millis() as f64,
+            error_msg.as_deref(),
+        );
 
-    result
+        match &result {
+            Ok(_) => return result,
+            Err(e) if (e.contains("timed out") || e.contains("timeout")) && attempt < max_retries => {
+                let wait = 5 * attempt as u64;
+                log::warn!("{label} attempt {attempt}/{max_retries} timed out, retrying in {wait}s...");
+                tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+            }
+            Err(_) => return result,
+        }
+    }
+    Err(format!("{label} failed after {max_retries} attempts"))
 }
 
 pub async fn call_llm_text(
@@ -251,7 +264,10 @@ pub async fn call_llm_text(
     data_dir: &Path,
     max_tokens: u32,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let url = format!(
         "{}/chat/completions",
         config.base_url.trim_end_matches('/')
@@ -331,7 +347,10 @@ pub async fn call_image_gen(
     config: &LlmConfig,
     data_dir: &Path,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
     let base = config.base_url.trim_end_matches('/');
     let t0 = std::time::Instant::now();
 
