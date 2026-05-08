@@ -37,6 +37,18 @@ pub fn run() {
             let db_path = data_dir.join("planova.db");
             let conn = db::init_db(&db_path).expect("Failed to initialize database");
 
+            // Mark any running/pending tasks as failed (app crashed or was force-closed)
+            let now = chrono::Utc::now().to_rfc3339();
+            let stale_count = conn
+                .execute(
+                    "UPDATE generation_tasks SET status = 'failed', progress = 0, error_message = 'Process exited', updated_at = ?1 WHERE status IN ('pending', 'running', 'executing')",
+                    [&now],
+                )
+                .unwrap_or(0);
+            if stale_count > 0 {
+                log::warn!("Reset {} stale task(s) to failed on startup", stale_count);
+            }
+
             // Register shared state
             app.manage(db::AppState {
                 db: Mutex::new(conn),

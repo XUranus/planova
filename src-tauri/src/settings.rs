@@ -100,9 +100,4 @@ pub fn get_pipeline_mode(data_dir: &Path) -> String {
         .to_string()
 }
 
-pub fn mask_api_key(key: &str) -> String {
-    if key.len() <= 4 {
-        return "****".to_string();
-    }
-    format!("****{}", &key[key.len() - 4..])
-}
+

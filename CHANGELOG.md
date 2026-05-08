@@ -2,6 +2,11 @@
 
 ## [Unreleased] - 2026-05-08
 
+### Bug Fixes
+
+- 移除 API key 脱敏处理：`get_settings` 和 `update_settings` 不再遮掩 LLM 配置中的 api_key 字段，修复修改 pipeline 模式后 LLM 配置被覆盖为空值的问题
+- 启动时自动清理卡住的任务：App 启动后将 `pending`/`running`/`executing` 状态的任务标记为 `failed`（"Process exited"），避免进程退出后任务无法删除
+
 ### Pipeline V3: Wall Cleanup, Door/Window Binding & Dimension Annotation Cross-Validation
 
 墙体平行边合并、门窗墙体吸附、尺度交叉验证、墙体网格房间分割。

@@ -1,33 +1,13 @@
 use tauri::{AppHandle, Manager};
 use crate::settings as settings_service;
 
-const PROVIDER_KEYS: &[&str] = &["llm_vlm", "llm_chat", "llm_image"];
-
-fn mask_providers(settings: &mut serde_json::Value) {
-    for key in PROVIDER_KEYS {
-        if let Some(provider) = settings.get_mut(*key) {
-            let masked = provider
-                .get("api_key")
-                .and_then(|v| v.as_str())
-                .map(|k| settings_service::mask_api_key(k));
-            if let (Some(masked_key), Some(obj)) = (masked, provider.as_object_mut()) {
-                obj.insert(
-                    "api_key".to_string(),
-                    serde_json::Value::String(masked_key),
-                );
-            }
-        }
-    }
-}
-
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<serde_json::Value, String> {
     let data_dir = app
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let mut settings = settings_service::get_settings(&data_dir);
-    mask_providers(&mut settings);
+    let settings = settings_service::get_settings(&data_dir);
     Ok(settings)
 }
 
@@ -40,8 +20,7 @@ pub fn update_settings(
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
-    let mut result = settings_service::update_settings(&data_dir, &data)?;
-    mask_providers(&mut result);
+    let result = settings_service::update_settings(&data_dir, &data)?;
     Ok(result)
 }
 
