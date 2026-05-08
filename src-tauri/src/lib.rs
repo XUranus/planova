@@ -49,6 +49,17 @@ pub fn run() {
                 log::warn!("Reset {} stale task(s) to failed on startup", stale_count);
             }
 
+            // Reset parse_status on files that were still parsing
+            let stale_files = conn
+                .execute(
+                    "UPDATE uploaded_files SET parse_status = 'failed' WHERE parse_status = 'parsing'",
+                    [],
+                )
+                .unwrap_or(0);
+            if stale_files > 0 {
+                log::warn!("Reset {} stale file(s) from parsing to failed on startup", stale_files);
+            }
+
             // Register shared state
             app.manage(db::AppState {
                 db: Mutex::new(conn),
