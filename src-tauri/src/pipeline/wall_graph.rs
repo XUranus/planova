@@ -19,28 +19,123 @@ pub struct WallGraphResult {
     pub junction_points: Vec<[f64; 2]>,
 }
 
+/// Zhang-Suen thinning: reduce a binary mask to 1px-wide skeleton lines.
+fn skeletonize(mask: &GrayImage) -> GrayImage {
+    let (w, h) = mask.dimensions();
+    let size = (w * h) as usize;
+    let mut data: Vec<u8> = mask.pixels().map(|p| if p[0] > 0 { 1 } else { 0 }).collect();
+    let mut to_delete_1 = vec![false; size];
+    let mut to_delete_2 = vec![false; size];
+
+    loop {
+        let mut changed = false;
+
+        to_delete_1.fill(false);
+        for y in 1..(h - 1) {
+            for x in 1..(w - 1) {
+                let idx = (y * w + x) as usize;
+                if data[idx] == 0 { continue; }
+                let p2 = data[((y - 1) * w + x) as usize];
+                let p3 = data[((y - 1) * w + x + 1) as usize];
+                let p4 = data[(y * w + x + 1) as usize];
+                let p5 = data[((y + 1) * w + x + 1) as usize];
+                let p6 = data[((y + 1) * w + x) as usize];
+                let p7 = data[((y + 1) * w + x - 1) as usize];
+                let p8 = data[(y * w + x - 1) as usize];
+                let p9 = data[((y - 1) * w + x - 1) as usize];
+                let neighbors = [p2, p3, p4, p5, p6, p7, p8, p9];
+                let bp: u8 = neighbors.iter().sum();
+                if bp >= 2 && bp <= 6 {
+                    let transitions = count_transitions(&neighbors);
+                    if transitions == 1 && p2 * p4 * p6 == 0 && p4 * p6 * p8 == 0 {
+                        to_delete_1[idx] = true;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        for (i, &del) in to_delete_1.iter().enumerate() {
+            if del { data[i] = 0; }
+        }
+
+        to_delete_2.fill(false);
+        for y in 1..(h - 1) {
+            for x in 1..(w - 1) {
+                let idx = (y * w + x) as usize;
+                if data[idx] == 0 { continue; }
+                let p2 = data[((y - 1) * w + x) as usize];
+                let p3 = data[((y - 1) * w + x + 1) as usize];
+                let p4 = data[(y * w + x + 1) as usize];
+                let p5 = data[((y + 1) * w + x + 1) as usize];
+                let p6 = data[((y + 1) * w + x) as usize];
+                let p7 = data[((y + 1) * w + x - 1) as usize];
+                let p8 = data[(y * w + x - 1) as usize];
+                let p9 = data[((y - 1) * w + x - 1) as usize];
+                let neighbors = [p2, p3, p4, p5, p6, p7, p8, p9];
+                let bp: u8 = neighbors.iter().sum();
+                if bp >= 2 && bp <= 6 {
+                    let transitions = count_transitions(&neighbors);
+                    if transitions == 1 && p2 * p4 * p8 == 0 && p2 * p6 * p8 == 0 {
+                        to_delete_2[idx] = true;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        for (i, &del) in to_delete_2.iter().enumerate() {
+            if del { data[i] = 0; }
+        }
+
+        if !changed { break; }
+    }
+
+    let mut result = mask.clone();
+    for (i, &val) in data.iter().enumerate() {
+        let x = (i as u32) % w;
+        let y = (i as u32) / w;
+        result.put_pixel(x, y, image::Luma([if val > 0 { 255 } else { 0 }]));
+    }
+    result
+}
+
+fn count_transitions(neighbors: &[u8; 8]) -> u8 {
+    let extended = [
+        neighbors[0], neighbors[1], neighbors[2], neighbors[3],
+        neighbors[4], neighbors[5], neighbors[6], neighbors[7],
+        neighbors[0],
+    ];
+    let mut count = 0;
+    for i in 0..8 {
+        if extended[i] == 0 && extended[i + 1] == 1 {
+            count += 1;
+        }
+    }
+    count
+}
+
 /// Build a wall graph from the binary wall mask using Hough line detection.
 /// Returns H/V line segments and junction points.
 pub fn build_wall_graph(
     wall_mask_path: &str,
     pipeline_dir: &Path,
 ) -> Result<WallGraphResult, String> {
-    let img = image::open(wall_mask_path)
+    let raw_mask = image::open(wall_mask_path)
         .map_err(|e| format!("Failed to open wall mask: {e}"))?
         .to_luma8();
-    let (w, h) = img.dimensions();
+    let (w, h) = raw_mask.dimensions();
+    let img = skeletonize(&raw_mask);
 
-    // Step 1: Hough line detection
-    // Use low vote threshold to capture all wall lines including short ones
+    // Save skeleton for debugging
+    let _ = img.save(pipeline_dir.join("wall_skeleton.png"));
+
     let min_dim = w.min(h);
     let options = LineDetectionOptions {
         vote_threshold: std::cmp::max((min_dim / 20) as u32, 10),
         suppression_radius: 4,
     };
     let polar_lines = detect_lines(&img, options);
-    log::info!("Hough detected {} raw lines", polar_lines.len());
+    log::info!("Hough detected {} raw lines (from skeleton)", polar_lines.len());
 
-    // Step 2: Filter to near-H and near-V lines
     let h_lines: Vec<&PolarLine> = polar_lines
         .iter()
         .filter(|l| is_near_horizontal(l.angle_in_degrees))
@@ -54,8 +149,6 @@ pub fn build_wall_graph(
         h_lines.len(),
         v_lines.len()
     );
-
-    // Step 3: Convert polar lines to wall-bounded segments
     let mut segments: Vec<WallSegment> = Vec::new();
     let mut idx = 0;
 
@@ -113,19 +206,16 @@ pub fn build_wall_graph(
             });
         }
     }
-
-    // Step 4: Merge collinear segments
     segments = merge_collinear_segments(segments, 8.0);
-
-    // Step 4b: Collapse parallel wall edges into centerlines
     segments = merge_parallel_segments(segments, 30.0);
     // Re-merge collinear after parallel merge
     segments = merge_collinear_segments(segments, 8.0);
-
-    // Step 5: Snap endpoints to grid
+    extend_endpoints_to_walls(&mut segments, 250.0);
     snap_endpoints(&mut segments, 8.0);
-
-    // Step 6: Find junction points
+    segments.retain(|s| {
+        let len = ((s.end[0] - s.start[0]).powi(2) + (s.end[1] - s.start[1]).powi(2)).sqrt();
+        len >= 4.0
+    });
     let junctions = find_junctions(&segments, 12.0);
 
     log::info!(
@@ -405,6 +495,69 @@ fn merge_two(a: &WallSegment, b: &WallSegment) -> WallSegment {
     }
 }
 
+/// Extend segment endpoints to intersect with nearby perpendicular walls.
+/// For each endpoint, finds the outermost perpendicular wall crossing within
+/// a generous threshold (to handle thick walls with inner/outer edges).
+fn extend_endpoints_to_walls(segments: &mut [WallSegment], max_extension: f64) {
+    let v_walls: Vec<(f64, f64, f64)> = segments.iter()
+        .filter(|s| s.orientation == "vertical")
+        .map(|s| (s.start[0], s.start[1].min(s.end[1]), s.start[1].max(s.end[1])))
+        .collect();
+
+    let h_walls: Vec<(f64, f64, f64)> = segments.iter()
+        .filter(|s| s.orientation == "horizontal")
+        .map(|s| (s.start[1], s.start[0].min(s.end[0]), s.start[0].max(s.end[0])))
+        .collect();
+
+    for seg in segments.iter_mut() {
+        if seg.orientation == "horizontal" {
+            let y = (seg.start[1] + seg.end[1]) / 2.0;
+            // Extend left: find the leftmost vertical wall at this Y within threshold
+            let left_x = seg.start[0].min(seg.end[0]);
+            if let Some(vx) = v_walls.iter()
+                .filter(|(_, y_lo, y_hi)| y >= *y_lo && y <= *y_hi)
+                .map(|(vx, _, _)| *vx)
+                .filter(|&vx| (left_x - vx).abs() <= max_extension && (left_x - vx).abs() > 1.0)
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                if seg.start[0] <= seg.end[0] { seg.start[0] = vx; } else { seg.end[0] = vx; }
+            }
+            // Extend right: find the rightmost vertical wall at this Y within threshold
+            let right_x = seg.start[0].max(seg.end[0]);
+            if let Some(vx) = v_walls.iter()
+                .filter(|(_, y_lo, y_hi)| y >= *y_lo && y <= *y_hi)
+                .map(|(vx, _, _)| *vx)
+                .filter(|&vx| (right_x - vx).abs() <= max_extension && (right_x - vx).abs() > 1.0)
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                if seg.start[0] >= seg.end[0] { seg.start[0] = vx; } else { seg.end[0] = vx; }
+            }
+        } else {
+            let x = (seg.start[0] + seg.end[0]) / 2.0;
+            // Extend up: find the topmost horizontal wall at this X within threshold
+            let top_y = seg.start[1].min(seg.end[1]);
+            if let Some(hy) = h_walls.iter()
+                .filter(|(_, x_lo, x_hi)| x >= *x_lo && x <= *x_hi)
+                .map(|(hy, _, _)| *hy)
+                .filter(|&hy| (top_y - hy).abs() <= max_extension && (top_y - hy).abs() > 1.0)
+                .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                if seg.start[1] <= seg.end[1] { seg.start[1] = hy; } else { seg.end[1] = hy; }
+            }
+            // Extend down: find the bottommost horizontal wall at this X within threshold
+            let bottom_y = seg.start[1].max(seg.end[1]);
+            if let Some(hy) = h_walls.iter()
+                .filter(|(_, x_lo, x_hi)| x >= *x_lo && x <= *x_hi)
+                .map(|(hy, _, _)| *hy)
+                .filter(|&hy| (bottom_y - hy).abs() <= max_extension && (bottom_y - hy).abs() > 1.0)
+                .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                if seg.start[1] >= seg.end[1] { seg.start[1] = hy; } else { seg.end[1] = hy; }
+            }
+        }
+    }
+}
+
 /// Snap all endpoints to a grid.
 fn snap_endpoints(segments: &mut [WallSegment], grid: f64) {
     for seg in segments.iter_mut() {
@@ -479,12 +632,17 @@ fn merge_parallel_segments(segments: Vec<WallSegment>, dist_threshold: f64) -> V
         let mut min_x = h_sorted[i].1.start[0].min(h_sorted[i].1.end[0]);
         let mut max_x = h_sorted[i].1.start[0].max(h_sorted[i].1.end[0]);
         let mut j = i + 1;
-        while j < h_sorted.len() && h_sorted[j].0 - h_sorted[i].0 < dist_threshold {
-            cluster_y_sum += h_sorted[j].0;
-            cluster_count += 1;
-            min_x = min_x.min(h_sorted[j].1.start[0].min(h_sorted[j].1.end[0]));
-            max_x = max_x.max(h_sorted[j].1.start[0].max(h_sorted[j].1.end[0]));
-            j += 1;
+        while j < h_sorted.len() {
+            let center = cluster_y_sum / cluster_count as f64;
+            if (h_sorted[j].0 - center).abs() < dist_threshold {
+                cluster_y_sum += h_sorted[j].0;
+                cluster_count += 1;
+                min_x = min_x.min(h_sorted[j].1.start[0].min(h_sorted[j].1.end[0]));
+                max_x = max_x.max(h_sorted[j].1.start[0].max(h_sorted[j].1.end[0]));
+                j += 1;
+            } else {
+                break;
+            }
         }
         let center_y = cluster_y_sum / cluster_count as f64;
         if max_x - min_x > 20.0 {
@@ -513,12 +671,17 @@ fn merge_parallel_segments(segments: Vec<WallSegment>, dist_threshold: f64) -> V
         let mut min_y = v_sorted[i].1.start[1].min(v_sorted[i].1.end[1]);
         let mut max_y = v_sorted[i].1.start[1].max(v_sorted[i].1.end[1]);
         let mut j = i + 1;
-        while j < v_sorted.len() && v_sorted[j].0 - v_sorted[i].0 < dist_threshold {
-            cluster_x_sum += v_sorted[j].0;
-            cluster_count += 1;
-            min_y = min_y.min(v_sorted[j].1.start[1].min(v_sorted[j].1.end[1]));
-            max_y = max_y.max(v_sorted[j].1.start[1].max(v_sorted[j].1.end[1]));
-            j += 1;
+        while j < v_sorted.len() {
+            let center = cluster_x_sum / cluster_count as f64;
+            if (v_sorted[j].0 - center).abs() < dist_threshold {
+                cluster_x_sum += v_sorted[j].0;
+                cluster_count += 1;
+                min_y = min_y.min(v_sorted[j].1.start[1].min(v_sorted[j].1.end[1]));
+                max_y = max_y.max(v_sorted[j].1.start[1].max(v_sorted[j].1.end[1]));
+                j += 1;
+            } else {
+                break;
+            }
         }
         let center_x = cluster_x_sum / cluster_count as f64;
         if max_y - min_y > 20.0 {

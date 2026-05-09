@@ -217,8 +217,6 @@ pub fn build_plan_graph(
             });
         }
     }
-
-    // Extract doors
     let mut doors: Vec<DoorCandidate> = vlm_response
         .get("detected_doors")
         .and_then(|v| v.as_array())
@@ -249,8 +247,6 @@ pub fn build_plan_graph(
             })
         })
         .collect();
-
-    // Extract windows
     let mut windows: Vec<WindowCandidate> = vlm_response
         .get("detected_windows")
         .and_then(|v| v.as_array())
@@ -273,12 +269,10 @@ pub fn build_plan_graph(
             })
         })
         .collect();
-
-    // Snap doors and windows to nearest walls, validate room references
-    snap_openings_to_walls(&mut doors, &mut windows, &wall_segments, &labels, 60.0);
+    snap_openings_to_walls(&mut doors, &mut windows, &wall_segments, &labels, 120.0);
 
     // Extract scale
-    let mut scale_candidates = extract_scale_candidates(vlm_response, _image_width, _image_height);
+    let mut scale_candidates = extract_scale_candidates(vlm_response, _image_width, _image_height, &wall_segments);
 
     // CV fallback: assume typical residential floor plan longest dimension ≈ 6-12m
     if !wall_segments.is_empty() {
@@ -599,9 +593,16 @@ fn generate_faces_from_walls(
     let bx1 = image_width as f64 - margin;
     let by1 = image_height as f64 - margin;
 
-    // Collect dominant X coordinates from vertical walls
+    // Minimum segment length to use for grid generation (filters noise)
+    const MIN_GRID_SEGMENT_LEN: f64 = 50.0;
+
+    // Collect dominant X coordinates from vertical walls (skip short noise)
     let mut v_xs: Vec<f64> = wall_segments.iter()
-        .filter(|s| (s.end[0] - s.start[0]).abs() < (s.end[1] - s.start[1]).abs())
+        .filter(|s| {
+            let is_vertical = (s.end[0] - s.start[0]).abs() < (s.end[1] - s.start[1]).abs();
+            let len = ((s.end[0] - s.start[0]).powi(2) + (s.end[1] - s.start[1]).powi(2)).sqrt();
+            is_vertical && len >= MIN_GRID_SEGMENT_LEN
+        })
         .map(|s| (s.start[0] + s.end[0]) / 2.0)
         .collect();
     v_xs.push(bx0);
@@ -620,9 +621,13 @@ fn generate_faces_from_walls(
         }
     }
 
-    // Collect dominant Y coordinates from horizontal walls
+    // Collect dominant Y coordinates from horizontal walls (skip short noise)
     let mut h_ys: Vec<f64> = wall_segments.iter()
-        .filter(|s| (s.end[1] - s.start[1]).abs() < (s.end[0] - s.start[0]).abs())
+        .filter(|s| {
+            let is_horizontal = (s.end[1] - s.start[1]).abs() < (s.end[0] - s.start[0]).abs();
+            let len = ((s.end[0] - s.start[0]).powi(2) + (s.end[1] - s.start[1]).powi(2)).sqrt();
+            is_horizontal && len >= MIN_GRID_SEGMENT_LEN
+        })
         .map(|s| (s.start[1] + s.end[1]) / 2.0)
         .collect();
     h_ys.push(by0);
@@ -651,7 +656,6 @@ fn generate_faces_from_walls(
         (snap_xs.len() - 1) * (snap_ys.len() - 1));
 
     // Assign each cell to the nearest room centroid
-    // Then merge adjacent cells with the same room
     let nx = snap_xs.len() - 1;
     let ny = snap_ys.len() - 1;
     let mut cell_owner: Vec<Vec<usize>> = vec![vec![usize::MAX; ny]; nx];
@@ -661,7 +665,6 @@ fn generate_faces_from_walls(
             let cell_cx = (snap_xs[ci] + snap_xs[ci + 1]) / 2.0;
             let cell_cy = (snap_ys[cj] + snap_ys[cj + 1]) / 2.0;
 
-            // Find nearest label
             let mut best_dist = f64::INFINITY;
             let mut best_label = 0;
             for (li, label) in labels.iter().enumerate() {
@@ -675,7 +678,38 @@ fn generate_faces_from_walls(
         }
     }
 
+    // Fallback: if any label has no cells, reassign the cell nearest to its centroid
+    let mut label_cell_count = vec![0usize; labels.len()];
+    for col in &cell_owner {
+        for &owner in col {
+            if owner < labels.len() {
+                label_cell_count[owner] += 1;
+            }
+        }
+    }
+    for (li, label) in labels.iter().enumerate() {
+        if label_cell_count[li] > 0 {
+            continue;
+        }
+        // Find the cell whose center is closest to this label's centroid
+        let mut best_dist = f64::INFINITY;
+        let mut best = (0usize, 0usize);
+        for ci in 0..nx {
+            for cj in 0..ny {
+                let cell_cx = (snap_xs[ci] + snap_xs[ci + 1]) / 2.0;
+                let cell_cy = (snap_ys[cj] + snap_ys[cj + 1]) / 2.0;
+                let d = ((cell_cx - label.centroid[0]).powi(2) + (cell_cy - label.centroid[1]).powi(2)).sqrt();
+                if d < best_dist {
+                    best_dist = d;
+                    best = (ci, cj);
+                }
+            }
+        }
+        cell_owner[best.0][best.1] = li;
+    }
+
     // For each label, find all cells belonging to it and merge into one polygon
+    let (wbx0, wby0, wbx1, wby1) = wall_bbox(wall_segments);
     let mut faces = Vec::new();
     for (li, label) in labels.iter().enumerate() {
         let mut min_cx = usize::MAX;
@@ -700,13 +734,15 @@ fn generate_faces_from_walls(
             continue;
         }
 
-        let poly = vec![
+        let raw_poly = vec![
             [snap_xs[min_cx], snap_ys[min_cy]],
             [snap_xs[max_cx + 1], snap_ys[min_cy]],
             [snap_xs[max_cx + 1], snap_ys[max_cy + 1]],
             [snap_xs[min_cx], snap_ys[max_cy + 1]],
             [snap_xs[min_cx], snap_ys[min_cy]],
         ];
+        let clipped = clip_polygon_to_rect(&raw_poly, wbx0, wby0, wbx1, wby1);
+        let poly = clipped;
         let area = compute_polygon_area(&poly);
 
         if area > 100.0 {
@@ -760,10 +796,55 @@ fn compute_polygon_area(polygon: &[[f64; 2]]) -> f64 {
     area.abs() / 2.0
 }
 
+/// Clip a convex polygon to an axis-aligned rectangle.
+fn clip_polygon_to_rect(polygon: &[[f64; 2]], rx0: f64, ry0: f64, rx1: f64, ry1: f64) -> Vec<[f64; 2]> {
+    let mut output = polygon.to_vec();
+    let edges: [(f64, f64, f64, f64); 4] = [
+        (rx0, ry0, rx0, ry1), // left
+        (rx1, ry0, rx1, ry1), // right
+        (rx0, ry0, rx1, ry0), // bottom
+        (rx0, ry1, rx1, ry1), // top
+    ];
+    for (ex0, ey0, ex1, ey1) in edges {
+        if output.is_empty() { break; }
+        let input = output.clone();
+        output.clear();
+        let n = input.len();
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let (px, py) = (input[i][0], input[i][1]);
+            let (qx, qy) = (input[j][0], input[j][1]);
+            let inside_p = if (ex1 - ex0).abs() < 1e-6 { // vertical edge
+                if ex0 == rx0 { px >= ex0 } else { px <= ex0 }
+            } else { // horizontal edge
+                if ey0 == ry0 { py >= ey0 } else { py <= ey0 }
+            };
+            let inside_q = if (ex1 - ex0).abs() < 1e-6 {
+                if ex0 == rx0 { qx >= ex0 } else { qx <= ex0 }
+            } else {
+                if ey0 == ry0 { qy >= ey0 } else { qy <= ey0 }
+            };
+            if inside_p { output.push(input[i]); }
+            if inside_p != inside_q {
+                let dx = qx - px;
+                let dy = qy - py;
+                let t = if (ex1 - ex0).abs() < 1e-6 {
+                    if dx.abs() > 1e-10 { (ex0 - px) / dx } else { 0.5 }
+                } else {
+                    if dy.abs() > 1e-10 { (ey0 - py) / dy } else { 0.5 }
+                };
+                let t = t.clamp(0.0, 1.0);
+                output.push([px + t * dx, py + t * dy]);
+            }
+        }
+    }
+    output
+}
 fn extract_scale_candidates(
     vlm_response: &serde_json::Value,
     image_width: u32,
     image_height: u32,
+    wall_segments: &[WallSegment],
 ) -> Vec<ScaleCandidate> {
     let mut candidates = Vec::new();
     let img_w = image_width as f64;
@@ -819,44 +900,49 @@ fn extract_scale_candidates(
         }
     }
 
-    // Cross-validate from dimension annotations
+    // Cross-validate from dimension annotations.
+    // Annotations measure room interior dimensions (wall centerline to centerline),
+    // which matches the wall bounding box extent directly.
     if let Some(annotations) = vlm_response.get("dimension_annotations").and_then(|v| v.as_array()) {
+        let (bbox_min_x, bbox_min_y, bbox_max_x, bbox_max_y) = wall_bbox(wall_segments);
+        let bbox_w = bbox_max_x - bbox_min_x;
+        let bbox_h = bbox_max_y - bbox_min_y;
+
         let mut annotation_mpps: Vec<f64> = Vec::new();
         for ann in annotations {
             if let (Some(text), Some(direction)) = (
                 ann.get("text").and_then(|v| v.as_str()),
                 ann.get("direction").and_then(|v| v.as_str()),
             ) {
-                // Parse the dimension value (assumed in mm)
                 if let Ok(dim_mm) = text.parse::<f64>() {
                     let dim_m = dim_mm / 1000.0;
                     if dim_m > 0.5 && dim_m < 30.0 {
-                        // Estimate wall length in pixels from the direction
-                        let wall_len_px = if direction == "horizontal" {
-                            img_w * 0.8 // rough estimate of wall extent
-                        } else {
-                            img_h * 0.8
-                        };
-                        let mpp = dim_m / wall_len_px;
-                        let total_w = img_w * mpp;
-                        let total_h = img_h * mpp;
-                        if total_w >= 1.0 && total_w <= 20.0 && total_h >= 1.0 && total_h <= 20.0 {
-                            annotation_mpps.push(mpp);
+                        let extent_px = if direction == "horizontal" { bbox_w } else { bbox_h };
+                        if extent_px > 50.0 {
+                            let mpp = dim_m / extent_px;
+                            let total_w = img_w * mpp;
+                            let total_h = img_h * mpp;
+                            log::info!("Annotation '{}' ({}): dim_m={:.3} extent_px={:.0} mpp={:.5}",
+                                text, direction, dim_m, extent_px, mpp);
+                            if total_w >= 1.0 && total_w <= 20.0 && total_h >= 1.0 && total_h <= 20.0 {
+                                annotation_mpps.push(mpp);
+                            }
                         }
                     }
                 }
             }
         }
         if !annotation_mpps.is_empty() {
-            annotation_mpps.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            let median_mpp = annotation_mpps[annotation_mpps.len() / 2];
+            // Use average mpp — the floor plan pixel aspect ratio differs from meter aspect ratio,
+            // so a single annotation's mpp under/over-estimates the other dimension.
+            let avg_mpp = annotation_mpps.iter().sum::<f64>() / annotation_mpps.len() as f64;
             log::info!(
-                "Dimension annotation scale: median mpp={:.5} from {} annotations → {:.1}×{:.1}m",
-                median_mpp, annotation_mpps.len(),
-                img_w * median_mpp, img_h * median_mpp
+                "Dimension annotation scale: avg_mpp={:.5} (from {} annotations) -> {:.1}x{:.1}m",
+                avg_mpp, annotation_mpps.len(),
+                img_w * avg_mpp, img_h * avg_mpp
             );
             candidates.push(ScaleCandidate {
-                meters_per_pixel: median_mpp,
+                meters_per_pixel: avg_mpp,
                 source_text: "dimension_annotations".into(),
                 confidence: 0.9,
             });

@@ -109,17 +109,17 @@ mod tests {
         // Mock VLM response with dimension annotations
         let vlm_response = serde_json::json!({
             "detected_rooms": [
-                {"type": "living_room", "name": "客厅", "centroid": [225, 300], "confidence": 0.9},
-                {"type": "bedroom", "name": "卧室", "centroid": [645, 420], "confidence": 0.9},
-                {"type": "bathroom", "name": "卫生间", "centroid": [645, 120], "confidence": 0.9}
+                {"type": "living_room", "name": "客厅", "centroid": [300, 500], "confidence": 0.9},
+                {"type": "bedroom", "name": "卧室", "centroid": [900, 400], "confidence": 0.9},
+                {"type": "bathroom", "name": "卫生间", "centroid": [900, 700], "confidence": 0.9}
             ],
             "detected_doors": [
-                {"position": [450, 420], "width_meters": 0.9, "connected_rooms": ["living_room", "bedroom"], "swing_direction": "right_inward", "confidence": 0.8},
-                {"position": [450, 120], "width_meters": 0.9, "connected_rooms": ["living_room", "bathroom"], "swing_direction": "right_inward", "confidence": 0.8}
+                {"position": [700, 400], "width_meters": 0.9, "connected_rooms": ["living_room", "bedroom"], "swing_direction": "right_inward", "confidence": 0.8},
+                {"position": [700, 700], "width_meters": 0.9, "connected_rooms": ["living_room", "bathroom"], "swing_direction": "right_inward", "confidence": 0.8}
             ],
             "detected_windows": [
-                {"position": [150, 600], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7},
-                {"position": [300, 600], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7}
+                {"position": [300, 200], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7},
+                {"position": [900, 200], "width_meters": 1.2, "wall_side": "north", "confidence": 0.7}
             ],
             "scale_info": {"detected": true, "meters_per_pixel": 0.01},
             "dimension_annotations": [
@@ -130,6 +130,10 @@ mod tests {
 
         let pg = plan_graph::build_plan_graph(&wall_graph, &vlm_response, img_w, img_h);
         println!("\nPlanGraph:");
+        println!("  {} scale candidates:", pg.scale_candidates.len());
+        for sc in &pg.scale_candidates {
+            println!("    mpp={:.5} conf={:.2} source={}", sc.meters_per_pixel, sc.confidence, sc.source_text);
+        }
         println!("  {} wall segments", pg.wall_segments.len());
         println!("  {} faces", pg.faces.len());
         for face in &pg.faces {
@@ -183,7 +187,7 @@ mod tests {
         // Asserts
         assert!(pg.faces.len() >= 2, "Should have at least 2 faces, got {}", pg.faces.len());
         assert!(rooms.len() >= 2, "Should have at least 2 rooms, got {}", rooms.len());
-        assert!(alignment.overall > 0.3, "Alignment overall too low: {:.3}", alignment.overall);
+        assert!(alignment.overall > 0.5, "Alignment overall too low: {:.3}", alignment.overall);
         assert!(walls_with_refs > 0, "No walls have room_refs!");
 
         // Scale mpp should be in realistic range for residential plans
@@ -191,14 +195,17 @@ mod tests {
             .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
             .map(|c| c.meters_per_pixel)
             .unwrap_or(0.0);
-        assert!(best_mpp > 0.003 && best_mpp < 0.02, "Scale mpp={:.5} outside realistic range [0.003, 0.02]", best_mpp);
+        assert!(best_mpp > 0.005 && best_mpp < 0.015, "Scale mpp={:.5} outside realistic range [0.005, 0.015]", best_mpp);
 
-        // Scale validation: no room should exceed 30m in any dimension
+        // Scale validation: no room should exceed 15m in any dimension
+        let mut total_area = 0.0;
         for room in rooms {
             let name = room.get("name").and_then(|v| v.as_str()).unwrap_or("?");
             let area = room.get("area").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            total_area += area;
             let max_dim = area.sqrt();
-            assert!(max_dim < 30.0, "Room '{}' too large: {:.1}m² (max_dim={:.1}m)", name, area, max_dim);
+            assert!(max_dim < 15.0, "Room '{}' too large: {:.1}m² (max_dim={:.1}m)", name, area, max_dim);
         }
+        assert!(total_area > 20.0 && total_area < 100.0, "Total area={:.1}m² outside realistic range", total_area);
     }
 }
