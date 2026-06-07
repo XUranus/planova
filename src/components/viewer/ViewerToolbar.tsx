@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   RotateCcw, Camera, FolderOpen, Move3D, Orbit, Pencil,
@@ -86,6 +86,39 @@ export function ViewerToolbar() {
   const [rendering, setRendering] = useState(false)
   const [renderDialogOpen, setRenderDialogOpen] = useState(false)
   const [renderPrompt, setRenderPrompt] = useState('')
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't fire if user is typing in an input/textarea/contentEditable
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if ((e.target as HTMLElement)?.isContentEditable) return
+      // Don't fire with modifier keys (let Ctrl+C, Alt+R, etc. pass through)
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      switch (e.key) {
+        case '1':
+          setMode('orbit')
+          break
+        case '2':
+          setMode('walk')
+          break
+        case '3':
+          setMode('edit')
+          break
+        case 'c':
+        case 'C':
+          if (homeScene) toggleCeilings()
+          break
+        case 'r':
+        case 'R':
+          e.preventDefault()
+          requestResetCamera()
+          break
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [homeScene, setMode, toggleCeilings, requestResetCamera])
 
   const handleOpenFile = useCallback(() => {
     fileInputRef.current?.click()

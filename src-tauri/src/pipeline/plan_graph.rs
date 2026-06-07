@@ -805,7 +805,7 @@ fn clip_polygon_to_rect(polygon: &[[f64; 2]], rx0: f64, ry0: f64, rx1: f64, ry1:
         (rx0, ry0, rx1, ry0), // bottom
         (rx0, ry1, rx1, ry1), // top
     ];
-    for (ex0, ey0, ex1, ey1) in edges {
+    for (ex0, ey0, ex1, _ey1) in edges {
         if output.is_empty() { break; }
         let input = output.clone();
         output.clear();

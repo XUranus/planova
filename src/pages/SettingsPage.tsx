@@ -208,7 +208,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <div className="flex-1 space-y-6 p-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
         <Button onClick={handleSave} disabled={saving}>

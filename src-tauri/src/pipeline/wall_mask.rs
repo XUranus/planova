@@ -83,15 +83,12 @@ pub fn extract_wall_mask(processed_path: &str, pipeline_dir: &Path) -> Result<St
     let mut filtered = GrayImage::new(w, h);
     let mut kept_components = 0;
     let mut kept_pixels = 0u32;
-    let mut area_filtered = 0u32;
-    let mut region_filtered = 0u32;
 
     for (i, label_id) in (1..=num_labels).enumerate() {
         let (area, cx, cy) = comp_meta[i];
 
         // Area filter
         if area < min_area {
-            area_filtered += 1;
             continue;
         }
 
@@ -101,7 +98,6 @@ pub fn extract_wall_mask(processed_path: &str, pipeline_dir: &Path) -> Result<St
             || cy < bbox_min_y as f64
             || cy > bbox_max_y as f64
         {
-            region_filtered += 1;
             continue;
         }
 

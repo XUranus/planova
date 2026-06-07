@@ -198,7 +198,7 @@ export function UploadPage() {
       {files.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium">{t('upload.uploaded_files')}</h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
             {files.map((file) => {
               const isParsing = file.parseStatus === 'parsing' || file.parseStatus === ''
               const isCompleted = file.parseStatus === 'completed'

@@ -64,7 +64,7 @@ export function ProjectDetail() {
       if (rafId) cancelAnimationFrame(rafId)
       rafId = requestAnimationFrame(() => {
         const delta = startX - e.clientX
-        const maxWidth = window.innerWidth * 0.5
+        const maxWidth = window.innerWidth * 0.4
         const newWidth = Math.min(maxWidth, Math.max(280, startWidth + delta))
         applyWidth(newWidth)
       })

@@ -126,7 +126,9 @@
   },
   "status_bar": {
     "ready": "Ready",
-    "offline": "Offline"
+    "offline": "Offline",
+    "parsing": "Parsing {{count}} file(s)...",
+    "room_count": "{{count}} rooms"
   },
   "generate": {
     "title": "Generate 3D",

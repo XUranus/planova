@@ -4,13 +4,10 @@ use tauri::{AppHandle, State};
 use crate::db::AppState;
 use crate::models::{GenerationTask, TaskResponse};
 use crate::storage;
+use crate::util::make_id;
 
 fn now_utc() -> String {
     chrono::Utc::now().to_rfc3339()
-}
-
-fn make_id() -> String {
-    uuid::Uuid::new_v4().simple().to_string()
 }
 
 fn row_to_task(row: &rusqlite::Row) -> rusqlite::Result<GenerationTask> {

@@ -39,18 +39,6 @@ pub struct GenerationTask {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Scene {
-    pub id: String,
-    pub project_id: String,
-    pub file_id: String,
-    pub name: String,
-    pub schema_version: String,
-    pub scene_json: Option<serde_json::Value>,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectResponse {
     pub id: String,
     pub name: String,

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Docusaurus build output
+docs/build
+docs/.docusaurus
+
 # Tauri
 src-tauri/target
 

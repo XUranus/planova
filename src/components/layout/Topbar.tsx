@@ -67,7 +67,7 @@ export function Topbar() {
   const breadcrumbs = getBreadcrumbs(location.pathname, projects, t)
 
   return (
-    <header className="flex h-12 items-center justify-between border-b px-5">
+    <header data-tauri-drag-region className="flex h-12 items-center justify-between border-b px-5">
       <nav className="flex items-center gap-1.5 text-sm">
         {breadcrumbs.map((crumb, i) => (
           <span key={crumb.path} className="flex items-center gap-1.5">

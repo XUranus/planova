@@ -61,7 +61,7 @@ export function ProjectDashboard() {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <div className="flex-1 space-y-6 p-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -131,7 +131,7 @@ export function ProjectDashboard() {
           <Box className="h-4 w-4" />
           {t('demo.section_title')}
         </h2>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 2xl:grid-cols-3 gap-4">
           {DEMO_PROJECTS.map((demo) => (
             <Card
               key={demo.id}
@@ -171,7 +171,7 @@ export function ProjectDashboard() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 2xl:grid-cols-3 gap-4">
           {projects.map((project) => (
             <Card
               key={project.id}

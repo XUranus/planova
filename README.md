@@ -2,6 +2,8 @@
 
 **AI Floor Plan to 3D Interior** — Upload a floor plan image, get a walkable 3D room.
 
+> 📖 **Documentation**: [xuranus.github.io/planova](https://xuranus.github.io/planova)
+
 Planova is a desktop app that turns 2D floor plan images into interactive 3D interior scenes. Upload a JPG/PNG/PDF floor plan, and the AI parses room geometry, places furniture, and generates a real-time 3D preview you can walk through, edit, and render.
 
 ![Screenshot_20260508_195100](screenshots/Screenshot_20260508_195100.png)

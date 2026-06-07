@@ -6,10 +6,6 @@ fn now_utc() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-fn make_id() -> String {
-    uuid::Uuid::new_v4().simple().to_string()
-}
-
 fn row_to_scene_response(row: &rusqlite::Row) -> rusqlite::Result<SceneResponse> {
     let json_str: String = row.get("scene_json")?;
     let scene_json = serde_json::from_str(&json_str).ok();

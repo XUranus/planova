@@ -126,7 +126,9 @@
   },
   "status_bar": {
     "ready": "就绪",
-    "offline": "离线"
+    "offline": "离线",
+    "parsing": "正在解析 {{count}} 个文件...",
+    "room_count": "{{count}} 个房间"
   },
   "generate": {
     "title": "生成 3D 场景",

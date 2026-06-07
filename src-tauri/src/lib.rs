@@ -5,6 +5,7 @@ mod models;
 mod pipeline;
 mod settings;
 mod storage;
+mod util;
 
 use std::sync::Mutex;
 use tauri::Manager;
